@@ -107,7 +107,7 @@ static void init(void)
 	kiss_init(&kiss, &afsk.fd, &ser.fd);
 
 	// Announce
-	kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Arduino KISS TNC\r\n");
+	kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");
 	kfile_printf(&ser.fd, "== Version 1.0, Build %d\r\n", VERS_BUILD);
 	if (mcusr_mirror & 8)
 	{

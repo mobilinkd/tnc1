@@ -68,6 +68,7 @@
 #define FESC     219       /** frame escape    */
 #define TFEND    220       /** transposed fend */
 #define TFESC    221       /** transposed fesc */
+#define ESCAPE    27       /** bootloader!     */
 
 // KISS commands
 #define TXDELAY  1
@@ -391,13 +392,12 @@ void kiss_poll_modem(KissCtx * k)
     }
 }
 
-static void reboot(void)
+void __attribute__ ((noreturn)) reboot(void)
 {
+    cli();
     wdt_disable();
     wdt_enable(WDTO_15MS);
-    while (1)
-    {
-    }
+    while (1) {}
 }
 
 /**
@@ -453,6 +453,10 @@ void kiss_poll_serial(KissCtx * k)
             {
                 k->state = WAIT_FOR_COMMAND;
                 k->tx_pos = 0;
+            }
+            if (c == ESCAPE)
+            {
+                reboot();
             }
             break;
         case WAIT_FOR_COMMAND:
