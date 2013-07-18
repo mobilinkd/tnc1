@@ -56,14 +56,14 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 2
  */
-#define CONFIG_UART0_TXBUFSIZE  32
+#define CONFIG_UART0_TXBUFSIZE  4
 
 /**
  * Size of the inbound FIFO buffer for port 0 [bytes].
  * $WIZ$ type = "int"
  * $WIZ$ min = 2
  */
-#define CONFIG_UART0_RXBUFSIZE  32
+#define CONFIG_UART0_RXBUFSIZE  512
 
 /**
  * Enable port 1
@@ -232,7 +232,7 @@
  * $WIZ$ min = 2
  * $WIZ$ supports = "avr and not xmega"
  */
-#define CONFIG_SPI_TXBUFSIZE    32
+#define CONFIG_SPI_TXBUFSIZE    4
 
 /**
  * Size of the inbound FIFO buffer for SPI port [bytes].
@@ -240,7 +240,7 @@
  * $WIZ$ min = 2
  * $WIZ$ supports = "avr and not xmega"
  */
-#define CONFIG_SPI_RXBUFSIZE    32
+#define CONFIG_SPI_RXBUFSIZE    4
 
 /**
  * Size of the outbound FIFO buffer for SPI port 0 [bytes].

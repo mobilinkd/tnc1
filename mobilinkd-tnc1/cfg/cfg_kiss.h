@@ -44,7 +44,7 @@
  * $WIZ$ type = "enum"
  * $WIZ$ value_list = "log_level"
  */
-#define KISS_LOG_LEVEL      LOG_LVL_WARN
+#define KISS_LOG_LEVEL      LOG_LVL_INFO
 
 /**
  * Module logging format.
@@ -60,7 +60,7 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 18
  */
-#define CONFIG_KISS_FRAME_BUF_LEN 330
+#define CONFIG_KISS_FRAME_BUF_LEN 512
 
 /**
  * KISS minimum frame buffer length.

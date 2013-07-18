@@ -44,7 +44,7 @@
  * $WIZ$ type = "enum"
  * $WIZ$ value_list = "log_level"
  */
-#define AFSK_LOG_LEVEL      LOG_LVL_WARN
+#define AFSK_LOG_LEVEL      LOG_LVL_INFO
 
 /**
  * Module logging format.
@@ -69,7 +69,7 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 2
  */
-#define CONFIG_AFSK_RX_BUFLEN 128
+#define CONFIG_AFSK_RX_BUFLEN 8
 
 /**
  * AFSK transimtter buffer fifo length.
@@ -77,14 +77,14 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 2
  */
-#define CONFIG_AFSK_TX_BUFLEN 64
+#define CONFIG_AFSK_TX_BUFLEN 8
 
 /**
  * AFSK DAC sample rate for modem outout.
  * $WIZ$ type = "int"
  * $WIZ$ min = 2400
  */
-#define CONFIG_AFSK_DAC_SAMPLERATE 9600
+#define CONFIG_AFSK_DAC_SAMPLERATE 76800
 
 /**
  * AFSK RX timeout in ms, set to -1 to disable.

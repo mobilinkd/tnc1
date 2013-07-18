@@ -392,7 +392,7 @@ void kiss_poll_modem(KissCtx * k)
     }
 }
 
-void __attribute__ ((noreturn)) reboot(void)
+static void __attribute__ ((noreturn)) reboot(void)
 {
     cli();
     wdt_disable();
@@ -454,7 +454,7 @@ void kiss_poll_serial(KissCtx * k)
                 k->state = WAIT_FOR_COMMAND;
                 k->tx_pos = 0;
             }
-            if (c == ESCAPE)
+            else if (c == ESCAPE)
             {
                 reboot();
             }
