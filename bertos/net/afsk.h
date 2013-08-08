@@ -162,6 +162,10 @@ typedef struct Afsk
 	Hdlc rx_hdlc;
 
 	volatile uint8_t carrier;
+	volatile uint8_t input_volume;
+	uint8_t input_volume_gain;
+	uint8_t output_volume;
+	uint8_t squelch_level;
 
 } Afsk;
 
@@ -186,6 +190,44 @@ INLINE void carrier_off(Afsk* af)
 }
 
 INLINE uint8_t carrier_present(const Afsk* af) { return af->carrier; }
+
+/**
+ * Set the output volume.  The output volume is a range from 0-255, with
+ * 255 being the highest.
+ *
+ * @note Setting a very low output volume may result in poor audio
+ *  quality due to the reduction in the accuracy of the waveform.
+ */
+INLINE void set_output_volume(KFile* fd, uint8_t volume)
+{
+    Afsk* afsk = AFSK_CAST(fd);
+
+    afsk->output_volume = volume;
+    AFSK_SET_OUTPUT_VOLUME(afsk);
+}
+
+INLINE void set_input_volume(KFile* fd, uint8_t level)
+{
+    Afsk* afsk = AFSK_CAST(fd);
+    afsk->input_volume_gain = level;
+}
+
+INLINE uint8_t get_input_volume(KFile* fd)
+{
+    Afsk* afsk = AFSK_CAST(fd);
+    return afsk->input_volume;
+}
+
+INLINE void set_squelch_level(KFile* fd, uint8_t level)
+{
+    Afsk* afsk = AFSK_CAST(fd);
+    afsk->squelch_level = level;
+}
+
+/// Can be called multiple times before tx_end().
+void afsk_test_tx_start(KFile *fd, int8_t hdlc_status);
+void afsk_test_tx_end(KFile *fd);
+
 
 void afsk_head (KFile * fd, int c);
 void afsk_tail (KFile * fd, int c);

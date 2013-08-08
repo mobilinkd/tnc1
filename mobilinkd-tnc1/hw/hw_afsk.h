@@ -103,10 +103,14 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
 #define AFSK_DAC_INIT(ch, ctx)\
 	do { \
 		(void)ch, (void)ctx;\
-			TCCR2A = BV(COM2B1) | BV(COM2B0) | BV(WGM21) | BV(WGM20);\
-			TCCR2B = BV(CS20);\
-			DDRB |= BV(3);\
-			DDRD |= BV(3);\
+			TCCR0A = BV(COM0A1) | BV(WGM01) | BV(WGM00); \
+			TCCR0B = BV(CS00); \
+			DDRB |= BV(2);\
+			TIMSK0 = BV(TOIE0); \
+			DDRD &= ~BV(4); PORTD &= ~BV(4); \
+			DDRD &= ~BV(5); PORTD &= ~BV(5); \
+            DDRD |= BV(6); \
+			DDRD &= ~BV(7); PORTD &= ~BV(7); \
 		} while (0)
 #else
 #define AFSK_DAC_INIT(ch, ctx)\
@@ -122,13 +126,13 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
     } while (0)
 #endif
 
+#if CONFIG_AFSK_PWM_TX == 0
 /**
  * Start DAC convertions on channel \a ch.
  * \param ch DAC channel.
  */
-#define AFSK_DAC_IRQ_START(ch)\
+#define AFSK_DAC_IRQ_START(af)\
     do { \
-        (void)ch; \
         extern bool hw_afsk_dac_isr; \
         PORTB |= BV(2); \
         hw_afsk_dac_isr = true; \
@@ -136,8 +140,30 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
         TCNT2 = DAC_TIMER_VALUE; \
         TCCR2B = BV(CS11); \
     } while (0)
+#else
 /**
- * Stop DAC convertions on channel \a ch.
+ * Start DAC conversions.
+ *
+ * PWM is on D5.
+ * PTT is on B2.
+ *
+ * Turn on PTT.
+ * Turn off ADC interrupt.
+ * Turn on PWM interrupt. Timer uses no prescaling.
+ */
+#define AFSK_DAC_IRQ_START(af)\
+    do { \
+        extern bool hw_afsk_dac_isr; \
+        PORTB |= BV(2); \
+        hw_afsk_dac_isr = true; \
+        TCCR1B = 0; \
+        TCCR0B = BV(CS00); \
+    } while (0)
+#endif
+
+#if CONFIG_AFSK_PWM_TX == 0
+/**
+ * Stop DAC conversions on channel \a ch.
  * \param ch DAC channel.
  */
 #define AFSK_DAC_IRQ_STOP(ch)\
@@ -149,5 +175,26 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
         TCCR1B = BV(CS11) | BV(WGM13) | BV(WGM12); \
         TCCR2B = 0; \
     } while (0)
+#else // PWM output
+/**
+ * Stop DAC conversions on \a ch.
+ *
+ * Turn off PTT.
+ * Turn off DAC interrupt.
+ * Turn on ADC interrupt.
+ *
+ */
+#define AFSK_DAC_IRQ_STOP(ch)\
+    do { \
+        (void)ch; \
+        extern bool hw_afsk_dac_isr; \
+        PORTB &= ~BV(2); \
+        hw_afsk_dac_isr = false; \
+        TCCR0B = 0; \
+        TCCR1B = BV(CS11) | BV(WGM13) | BV(WGM12); \
+    } while (0)
+#endif
+
+#define AFSK_SET_OUTPUT_VOLUME(af) do { (void)af; } while (0)
 
 #endif /* HW_AFSK_H */

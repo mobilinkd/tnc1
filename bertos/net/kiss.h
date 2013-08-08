@@ -60,11 +60,14 @@ typedef struct Params
 	uint8_t slot;                ///< How long in 10mS units to wait between sampling the channel to see if free
 	uint8_t txtail;              ///< How long in 10mS units to wait after the data before keying off the transmitter
 	uint8_t duplex;              ///< Ignore current channel activity - just key up
-	uint8_t hware;               ///< Not used at present
+	uint8_t output_volume;       ///< output volume (0-255)
+	uint8_t input_volume;        ///< input attenuation (future)
+	uint8_t squelch;             ///< input squelch level (0-255)
 	uint8_t chksum;              ///< Validity check of params data
 } Params;
 
 
+#define HW_CMD_BUFFER_SIZE 16
 
 
 typedef struct KissCtx
@@ -77,10 +80,13 @@ typedef struct KissCtx
 	KFile *serial;                               ///< I/f to the serial port
 	uint8_t command;                             ///< KISS command byte
 	uint8_t state;                               ///< what data we are expecting next
+	uint8_t prev_state;                          ///< what state to return to after transpose
 	ticks_t last_tick;                           ///< timestamp of last byte into tx_buf
 	ticks_t p_tick;                              ///< p-persistence timestamp.
     ticks_t tx_wait_tick;                        ///< timestamp started waiting to tx.
     uint8_t can_tx_now;
+    uint8_t hw_cmd_buffer[HW_CMD_BUFFER_SIZE];   ///< data for hw commands.
+    uint8_t hw_cmd_len;                          ///< number of bytes in hw_cmd_buffer.
     Params params;                               ///< Operational KISS Parameters that control transmission
 } KissCtx;
 

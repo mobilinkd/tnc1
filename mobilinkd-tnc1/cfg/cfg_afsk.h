@@ -84,7 +84,8 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 2400
  */
-#define CONFIG_AFSK_DAC_SAMPLERATE 76800
+// #define CONFIG_AFSK_DAC_SAMPLERATE 38400
+#define CONFIG_AFSK_DAC_SAMPLERATE 62500
 
 /**
  * AFSK RX timeout in ms, set to -1 to disable.
@@ -114,7 +115,7 @@
  *
  * $WIZ$ type = "boolean"
  */
-#define CONFIG_AFSK_PWM_TX   0
+#define CONFIG_AFSK_PWM_TX   1
 
 
 #endif /* CFG_AFSK_H */

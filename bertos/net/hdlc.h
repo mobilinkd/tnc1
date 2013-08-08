@@ -83,6 +83,9 @@ typedef struct Hdlc
 #define HDLC_ERROR_CRC     2
 #define HDLC_ERROR_ABORT   3
 #define HDLC_PKT_AVAILABLE 4
+#define HDLC_TEST_SPACE    16
+#define HDLC_TEST_MARK     17
+#define HDLC_TEST_BOTH     18
 
 // this is an odd value because we process the hdlc data as a stream and we
 // don't see the closing flag until we have already put 7 bits of it into the CRC

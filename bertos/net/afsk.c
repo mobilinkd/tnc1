@@ -69,9 +69,6 @@
 #define SPACE_FREQ 2200
 #define SPACE_INC  (uint16_t)(DIV_ROUND(SIN_LEN * (uint32_t)SPACE_FREQ, CONFIG_AFSK_DAC_SAMPLERATE))
 
-//Ensure sample rate is a multiple of bit rate
-STATIC_ASSERT(!(CONFIG_AFSK_DAC_SAMPLERATE % BITRATE));
-
 #define DAC_SAMPLEPERBIT (CONFIG_AFSK_DAC_SAMPLERATE / BITRATE)
 
 /**
@@ -81,37 +78,39 @@ STATIC_ASSERT(!(CONFIG_AFSK_DAC_SAMPLERATE % BITRATE));
  */
 static const uint8_t PROGMEM sin_table[] =
 {
-	128, 129, 131, 132, 134, 135, 137, 138, 140, 142, 143, 145, 146, 148, 149, 151,
-	152, 154, 155, 157, 158, 160, 162, 163, 165, 166, 167, 169, 170, 172, 173, 175,
-	176, 178, 179, 181, 182, 183, 185, 186, 188, 189, 190, 192, 193, 194, 196, 197,
-	198, 200, 201, 202, 203, 205, 206, 207, 208, 210, 211, 212, 213, 214, 215, 217,
-	218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233,
-	234, 234, 235, 236, 237, 238, 238, 239, 240, 241, 241, 242, 243, 243, 244, 245,
-	245, 246, 246, 247, 248, 248, 249, 249, 250, 250, 250, 251, 251, 252, 252, 252,
-	253, 253, 253, 253, 254, 254, 254, 254, 254, 255, 255, 255, 255, 255, 255, 255,
+    0,   1,   3,   4,   6,   7,   9,  10,  12,  14,  15,  17,  18,  20,  21,  23,
+   24,  26,  27,  29,  30,  32,  34,  35,  37,  38,  39,  41,  42,  44,  45,  47,
+   48,  50,  51,  53,  54,  55,  57,  58,  60,  61,  62,  64,  65,  66,  68,  69,
+   70,  72,  73,  74,  75,  77,  78,  79,  80,  82,  83,  84,  85,  86,  87,  89,
+   90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100, 101, 102, 103, 104, 105,
+  106, 106, 107, 108, 109, 110, 110, 111, 112, 113, 113, 114, 115, 115, 116, 117,
+  117, 118, 118, 119, 120, 120, 121, 121, 122, 122, 122, 123, 123, 124, 124, 124,
+  125, 125, 125, 125, 126, 126, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127
 };
 
 #define SIN_LEN 512 ///< Full wave length
 
 STATIC_ASSERT(sizeof(sin_table) == SIN_LEN / 4);
 
-
 /**
  * Given the index, this function computes the correct sine sample
  * based only on the first quarter of wave.
  */
-INLINE uint8_t sin_sample(uint16_t idx)
+INLINE uint8_t sin_sample(uint16_t idx, uint8_t volume)
 {
 #if 1
     const uint16_t SIN_TABLE_END = sizeof(sin_table) - 1;
 
-    uint16_t phase = (idx / sizeof(sin_table)) & 0x03;
-    uint16_t index = idx & SIN_TABLE_END;
-    uint8_t result = phase & 1 ?
+    const uint16_t phase = (idx / sizeof(sin_table)) & 0x03;
+    const uint16_t index = idx & SIN_TABLE_END;
+    uint8_t sample = phase & 1 ?
         pgm_read8(&sin_table[SIN_TABLE_END - index]) :
         pgm_read8(&sin_table[index]);
 
-    return phase & 2 ? 255 - result : result;
+    uint16_t tmp = (sample * volume);
+    sample = (tmp >> 8);
+
+    return phase & 2 ? 127 - sample : 128 + sample;
 #else
 	ASSERT(idx < SIN_LEN);
 	uint16_t new_idx = idx % (SIN_LEN / 2);
@@ -137,6 +136,8 @@ INLINE uint8_t sin_sample(uint16_t idx)
 void afsk_adc_isr(Afsk *af, int8_t curr_sample)
 {
 	uint8_t this_bit = 0;
+
+	if (af->status & 16) return;
 
 	if (!carrier_present(af))
 	{
@@ -237,9 +238,11 @@ void afsk_adc_isr(Afsk *af, int8_t curr_sample)
 // Never called from ISR.
 void afsk_tx_bottom_half(Afsk* af)
 {
+    int8_t bit;
+
     while (!fifo_isfull_locked(&af->tx_bit_fifo))
     {
-        int8_t bit = hdlc_encode(&af->tx_hdlc, &af->tx_fifo);
+        bit = hdlc_encode(&af->tx_hdlc, &af->tx_fifo);
         if (bit == -1) break;
         fifo_push_locked(&af->tx_bit_fifo, bit);
     }
@@ -248,6 +251,19 @@ void afsk_tx_bottom_half(Afsk* af)
 // Only called in ISR context.
 INLINE int8_t get_next_bit(Afsk *af)
 {
+    if ((af->status & 16) != 0)
+    {
+        if ((af->status & 3) == 2)
+        {
+            af->sampled_bits ^= 1;
+            return af->sampled_bits;
+        }
+        else
+        {
+            return (af->status & 1);
+        }
+    }
+
     return fifo_isempty(&af->tx_bit_fifo) ?
         -1 : (int8_t) fifo_pop(&af->tx_bit_fifo);
 }
@@ -286,19 +302,6 @@ uint8_t afsk_dac_isr(Afsk *af)
 			af->phase_inc = SPACE_INC;
 			break;
 		}
-	} else {
-	    // busy wait
-	    __asm__ __volatile__ (
-	        "nop" "\n\t"
-            "nop" "\n\t"
-            "nop" "\n\t"
-            "nop" "\n\t"
-            "nop" "\n\t"
-            "nop" "\n\t"
-            "nop" "\n\t"
-            "nop" "\n\t"
-	    );
-
 	}
 
 	/* Get new sample and put it out on the DAC */
@@ -306,7 +309,7 @@ uint8_t afsk_dac_isr(Afsk *af)
 	af->phase_acc &= (SIN_LEN - 1);
 
 	af->sample_count--;
-	return sin_sample(af->phase_acc);
+	return sin_sample(af->phase_acc, af->output_volume);
 }
 
 
@@ -361,7 +364,7 @@ static size_t afsk_write(KFile *fd, const void *_buf, size_t size)
             af->phase_inc = MARK_INC;
             af->phase_acc = 0;
             af->sending = true;
-            AFSK_DAC_IRQ_START (af->dac_ch);
+            AFSK_DAC_IRQ_START (af);
         }
 	}
 
@@ -424,6 +427,31 @@ void afsk_tail (KFile * fd, int c)
 	hdlc_tail (&af->tx_hdlc, c);
 }
 
+void afsk_test_tx_start(KFile *fd, int8_t hdlc_status)
+{
+    Afsk *af = AFSK_CAST(fd);
+
+    ATOMIC(
+        af->status = hdlc_status;
+        af->sampled_bits = 0;       // reuse this since RX disabled while testing.
+        afsk_tx_bottom_half(af);
+
+        if (!af->sending)
+        {
+            af->sample_count = 0;
+            af->phase_acc = 0;
+            af->sending = true;
+            AFSK_DAC_IRQ_START (af);
+        }
+    );
+}
+
+void afsk_test_tx_end(KFile *fd)
+{
+    Afsk *af = AFSK_CAST(fd);
+    af->status = HDLC_ERROR_NONE;
+    af->sampled_bits = 0;
+}
 
 /**
  * Initialize an AFSK1200 modem.

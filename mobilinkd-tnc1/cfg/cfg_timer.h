@@ -44,7 +44,8 @@
  * $WIZ$ type = "enum"
  * $WIZ$ value_list = "timer_select"
  */
-#define CONFIG_TIMER TIMER_DEFAULT
+// #define CONFIG_TIMER TIMER_DEFAULT
+#define CONFIG_TIMER TIMER_ON_OUTPUT_COMPARE2
 
 /**
  * Debug timer interrupt using a strobe pin.

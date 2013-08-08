@@ -60,8 +60,6 @@ typedef struct DCFilter
 
 static DCFilter dc_filter;
 
-#define ADC_RATE (CONFIG_AFSK_DAC_SAMPLERATE / 9600)
-
 INLINE void capture(Afsk* af, int16_t adc)
 {
     int16_t avg = 0;
@@ -78,7 +76,7 @@ INLINE void capture(Afsk* af, int16_t adc)
 
     avg >>= DC_FILTER_SHIFT;
 
-    if ((max - min) >= 10)
+    if ((max - min) >= af->squelch_level)
     {
         carrier_on(af);
     }
@@ -86,6 +84,8 @@ INLINE void capture(Afsk* af, int16_t adc)
     {
         carrier_off(af);
     }
+
+    af->input_volume = max - min;
 
     afsk_adc_isr(af, dc_filter.buffer[dc_filter.pos] - avg);
 
@@ -140,22 +140,18 @@ bool hw_afsk_dac_isr;
 DECLARE_ISR(ADC_vect)
 {
 	TIFR1 = BV(ICF1);
-	capture(ctx, (int16_t) ADC);
-	// afsk_adc_isr(ctx, ((int16_t)((ADC) >> 2) - 128));
-#if 0
-	if (hw_afsk_dac_isr)
-#if CONFIG_AFSK_PWM_TX == 1
-		OCR2B = afsk_dac_isr(ctx);             // uses timer 2 on port D bit 3
-#else
-		PORTD = ((PORTD & 0x03) | (afsk_dac_isr(ctx) & 0xF0));
-#endif
-#endif
+	capture(ctx, ADC);
 }
 
+#if CONFIG_AFSK_PWM_TX == 1
+DECLARE_ISR(TIMER0_OVF_vect)
+{
+    OCR0A = afsk_dac_isr(ctx);             // uses timer 0 on port D bit 5
+}
+#else
 DECLARE_ISR(TIMER2_COMPA_vect)
 {
     // TCNT2 = DAC_TIMER_VALUE;
-
-    if (hw_afsk_dac_isr)
-        PORTD = ((PORTD & 0x03) | (afsk_dac_isr(ctx) & 0xF0));
+    PORTD = ((PORTD & 0x03) | (afsk_dac_isr(ctx) & 0xF0));
 }
+#endif

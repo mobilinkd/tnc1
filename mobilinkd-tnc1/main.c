@@ -108,7 +108,7 @@ static void init(void)
 
 	// Announce
 	kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");
-	kfile_printf(&ser.fd, "== Version 1.0, Build %d\r\n", VERS_BUILD);
+	kfile_printf(&ser.fd, "== Version 1.2, Build %d\r\n", VERS_BUILD);
 	if (mcusr_mirror & 8)
 	{
 		kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
