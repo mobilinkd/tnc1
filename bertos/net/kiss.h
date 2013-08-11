@@ -74,19 +74,15 @@ typedef struct KissCtx
 {
 	uint8_t rx_buf[CONFIG_KISS_FRAME_BUF_LEN];   ///< Buffer of decoded data prior to transmission to serial
 	uint16_t rx_pos;                             ///< Offset in buffer of next octet
-//	uint8_t tx_buf[CONFIG_KISS_FRAME_BUF_LEN];   ///< buffer of decoded KISS data prior to transmission to the modem
+	uint8_t tx_buf[CONFIG_KISS_FRAME_BUF_LEN];   ///< buffer of decoded KISS data prior to transmission to the modem
 	uint16_t tx_pos;                             ///< Offset in buffer of next octet
 	KFile *modem;                                ///< I/f to the afsk modem
 	KFile *serial;                               ///< I/f to the serial port
 	uint8_t command;                             ///< KISS command byte
 	uint8_t state;                               ///< what data we are expecting next
-	uint8_t prev_state;                          ///< what state to return to after transpose
 	ticks_t last_tick;                           ///< timestamp of last byte into tx_buf
 	ticks_t p_tick;                              ///< p-persistence timestamp.
     ticks_t tx_wait_tick;                        ///< timestamp started waiting to tx.
-    uint8_t can_tx_now;
-    uint8_t hw_cmd_buffer[HW_CMD_BUFFER_SIZE];   ///< data for hw commands.
-    uint8_t hw_cmd_len;                          ///< number of bytes in hw_cmd_buffer.
     Params params;                               ///< Operational KISS Parameters that control transmission
 } KissCtx;
 

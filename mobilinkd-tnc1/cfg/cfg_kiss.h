@@ -60,7 +60,7 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 18
  */
-#define CONFIG_KISS_FRAME_BUF_LEN 512
+#define CONFIG_KISS_FRAME_BUF_LEN 330
 
 /**
  * KISS minimum frame buffer length.

@@ -102,6 +102,14 @@
 
 extern uint8_t wdt_location;
 
+
+static uint8_t checksum(KissCtx* k)
+{
+    return ~(k->params.txdelay + k->params.persist + k->params.slot
+        + k->params.txtail + k->params.duplex + k->params.output_volume
+        + k->params.input_volume + k->params.squelch);
+}
+
 /**
  * Save kiss parameters to eeprom
  * Calculate and store a basic CRC with the data
@@ -111,9 +119,7 @@ extern uint8_t wdt_location;
  */
 static void save_params(KissCtx * k)
 {
-    k->params.chksum = ~(k->params.txdelay + k->params.persist + k->params.slot
-        + k->params.txtail + k->params.duplex + k->params.output_volume
-        + k->params.input_volume + k->params.squelch);
+    k->params.chksum = checksum(k);
 
     KISS_EEPROM_SAVE ();
 }
@@ -131,10 +137,7 @@ static void load_params(KissCtx * k)
 
     KISS_EEPROM_LOAD ();
 
-    if (~(k->params.chksum)
-        != k->params.txdelay + k->params.persist + k->params.slot
-            + k->params.txtail + k->params.duplex + k->params.output_volume
-            + k->params.input_volume + k->params.squelch)
+    if (k->params.chksum != checksum(k))
     {
         // load sensible defaults if backing store has a bad checksum
         k->params.txdelay = 50;
@@ -142,7 +145,7 @@ static void load_params(KissCtx * k)
         k->params.slot = 10;
         k->params.txtail = 1;
         k->params.duplex = 0;
-        k->params.output_volume = 11;
+        k->params.output_volume = 128;
         k->params.input_volume = 2;
         k->params.squelch = 2;
         save_params(k);
@@ -197,42 +200,29 @@ static void send_input_volume(KissCtx* k)
     kfile_flush(k->serial);
 }
 
-static void check_tx_test_status(KissCtx* k)
-{
-    Afsk* afsk = AFSK_CAST(k->modem);
-    if (!afsk->sending && (afsk->status & 16))
-    {
-        kfile_print(k->serial, "== TX stopped - underflow?\r\n");
-        kfile_flush(k->serial);
-    }
-}
-
 static void kiss_decode_hw_command(KissCtx * k)
 {
     // PARAMS are saved by the caller.
 
-    uint8_t cmd = k->hw_cmd_buffer[0];
-    uint8_t value;
+    uint8_t cmd = k->tx_buf[0];
+    uint8_t value = k->tx_buf[1];
 
     LOG_INFO("kiss_decode_hw_command (%d)\r\n", (int) cmd);
 
     switch (cmd)
     {
     case SET_OUTPUT_VOLUME:
-        value = k->hw_cmd_buffer[1];
         k->params.output_volume = value;
         set_output_volume(k->modem, value);
         LOG_INFO("SET_OUTPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_INPUT_VOLUME:
-        value = k->hw_cmd_buffer[1];
         k->params.input_volume = value;
         set_input_volume(k->modem, value);
         LOG_INFO("SET_INPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_SQUELCH_LEVEL:
         afsk_test_tx_end(k->modem);
-        value = k->hw_cmd_buffer[1];
         k->params.squelch = value;
         set_squelch_level(k->modem, value);
         break;
@@ -272,7 +262,7 @@ static void kiss_decode_hw_command(KissCtx * k)
  */
 static void kiss_decode_command(KissCtx * k)
 {
-    uint8_t b = k->hw_cmd_buffer[0];
+    uint8_t b = k->tx_buf[0];
 
     LOG_INFO("kiss_decode_command (%d)\r\n", (int)b);
 
@@ -301,6 +291,7 @@ static void kiss_decode_command(KissCtx * k)
     }
 
     save_params(k);
+    k->tx_pos = 0;
 }
 
 ///< Transmit algorithm
@@ -400,15 +391,7 @@ static bool can_transmit(KissCtx* k)
     }
 }
 
-static void kiss_tx_to_modem(KissCtx* k, int c)
-{
-    wdt_location = 139;
-
-    k->tx_pos++;
-    kfile_putc(c, k->modem);
-}
-
-static void kiss_flush_modem(KissCtx* k)
+INLINE void kiss_flush_modem(KissCtx* k)
 {
     wdt_location = 140;
     kfile_flush(k->modem);	  // wait for transmitter to finish
@@ -510,21 +493,20 @@ void kiss_poll_serial(KissCtx * k)
 {
     int c;
 
-    check_tx_test_status(k);
-
     /*
-     * We use the serial device to buffer the TX data in the serial
-     * RX buffer.  This is why the serial device configuration shows
-     * an oversized RX buffer.
+     * If we are in WAIT_FOR_TRANSMIT, there is a complete packet
+     * ready to send.
      *
      * KISS Persistence requires that we wait indefinitely for the carrier
      * to clear, and that we obey the p-persistence value and slot time.
      * This can lead to multi-second delays in sending.  While this is
      * happening, we may be dropping data from the serial port.
      *
-     * Check if it is OK to transmit as soon as the KISS data symbol
-     * arrives.  Do not read any additional data from the serial port
-     * until permitted to send.
+     * We attempted to check if it is OK to transmit as soon as the first
+     * KISS data symbol arrives, using the serial buffer as the TX buffer.
+     * It seems older, slower Android devices will not TX all of the data
+     * fast enough, stuttering the BT serial data, which would lead to
+     * corrupted packets.  So that's not feasible.
      */
 
     wdt_location = 130;
@@ -532,7 +514,10 @@ void kiss_poll_serial(KissCtx * k)
     {
         if (can_transmit(k))
         {
-            kiss_change_state(k, WAIT_FOR_DATA);	// Send it.
+            kfile_write(k->modem, k->tx_buf, k->tx_pos);
+            kiss_flush_modem(k);
+            k->tx_pos = 0;
+            kiss_change_state(k, WAIT_FOR_DATA);
         }
         else
         {
@@ -570,50 +555,14 @@ void kiss_poll_serial(KissCtx * k)
                 LOG_INFO("Only KISS channel 0 supported\r\n");
                 kiss_change_state(k, WAIT_FOR_FEND);
             }
-            else if ((c & 0x0f) != 0)
-            {
-                kiss_change_state(k, WAIT_FOR_PARAMETER);
-                k->command = c & 0x0f;
-                k->hw_cmd_len = 0;
-            }
             else
             {
                 k->command = c & 0x0f;
-                if (k->can_tx_now)
-                {
-                    kiss_change_state(k, WAIT_FOR_DATA);
-                }
-                else
-                {
-                    srand(timer_clock());			// Noise.
-                    kiss_change_state(k, WAIT_FOR_TRANSMIT);	// command == data
-                    k->tx_wait_tick = timer_clock();
-                    return;
-                }
+                ticks_t t = timer_clock();
+                srand(t);			// Noise.
+                k->tx_wait_tick = t;
+                kiss_change_state(k, WAIT_FOR_DATA);	// command == data
             }
-            break;
-        case WAIT_FOR_PARAMETER:
-            if (c == FESC)
-            {
-                k->prev_state = k->state;
-                kiss_change_state(k, WAIT_FOR_TRANSPOSE);
-            }
-            else if (c == FEND)
-            {
-                kiss_change_state(k, WAIT_FOR_COMMAND);
-                kiss_decode_command(k);
-            }
-            else
-            {
-                k->hw_cmd_buffer[k->hw_cmd_len++] = c;
-                if (k->hw_cmd_len == HW_CMD_BUFFER_SIZE)
-                {
-                    kiss_change_state(k, WAIT_FOR_FEND);
-                    kiss_decode_command(k);
-                }
-            }
-
-            k->last_tick = timer_clock();
             break;
         case WAIT_FOR_TRANSPOSE:
             switch (c)
@@ -626,44 +575,46 @@ void kiss_poll_serial(KissCtx * k)
                 c = FESC;
                 break;
             }
-
-            switch (k->prev_state)
-            {
-            case WAIT_FOR_PARAMETER:
-                k->hw_cmd_buffer[k->hw_cmd_len++] = c;
-                break;
-            case WAIT_FOR_COMMAND:
-                kiss_tx_to_modem(k, c);
-                k->last_tick = timer_clock();
-                break;
-            }
-
-            kiss_change_state(k, k->prev_state);
+            k->tx_buf[k->tx_pos++] = c;
+            k->last_tick = timer_clock();
+            kiss_change_state(k, WAIT_FOR_DATA);
             break;
         case WAIT_FOR_DATA:
             if (c == FESC)
             {
-                k->prev_state = k->state;
                 kiss_change_state(k, WAIT_FOR_TRANSPOSE);
             }
-            else if (c == FEND)
+            else if (c == FEND || k->tx_pos == CONFIG_KISS_FRAME_BUF_LEN)
             {
-                wdt_location = 151;
-                if (k->tx_pos) kiss_flush_modem(k);
-                k->last_tick = timer_clock();
-                kiss_change_state(k, WAIT_FOR_COMMAND);
-                k->can_tx_now = 1;
+                if (k->command != 0)
+                {
+                    kiss_change_state(k, WAIT_FOR_COMMAND);
+                    kiss_decode_command(k);
+                }
+                else
+                {
+                    wdt_location = 151;
+                    if (k->tx_pos >= KISS_MIN_FRAME_LEN)
+                    {
+                        kiss_change_state(k, WAIT_FOR_TRANSMIT);
+                        k->last_tick = timer_clock();
+                        return;
+                    }
+                    else
+                    {
+                        k->tx_pos = 0;
+                        kiss_change_state(k, WAIT_FOR_COMMAND);
+                    }
+                }
             }
             else
             {
-                kiss_tx_to_modem(k, c);
+                k->tx_buf[k->tx_pos++] = c;
                 k->last_tick = timer_clock();
             }
             break;
         }
     }
-
-    k->can_tx_now = 0;
 
     wdt_location = 133;
 
@@ -681,11 +632,10 @@ void kiss_poll_serial(KissCtx * k)
     if (k->state != WAIT_FOR_FEND
         && timer_clock() - k->last_tick > ms_to_ticks(2000L))
     {
-        if (k->tx_pos)
+        if (k->tx_pos != 0)
         {
             kfile_printf(k->serial, "== RX Timeout (%d)\r\n", k->state);
-            wdt_location = 152;
-            kiss_flush_modem(k);
+            k->tx_pos = 0;
         }
         kiss_change_state(k, WAIT_FOR_FEND);
     }
