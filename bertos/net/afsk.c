@@ -98,28 +98,26 @@ STATIC_ASSERT(sizeof(sin_table) == SIN_LEN / 4);
  */
 INLINE uint8_t sin_sample(uint16_t idx, uint8_t volume)
 {
-#if 1
     const uint16_t SIN_TABLE_END = sizeof(sin_table) - 1;
 
     const uint16_t phase = (idx / sizeof(sin_table)) & 0x03;
     const uint16_t index = idx & SIN_TABLE_END;
-    uint8_t sample = phase & 1 ?
-        pgm_read8(&sin_table[SIN_TABLE_END - index]) :
-        pgm_read8(&sin_table[index]);
+    uint8_t sample;
+    if (phase & 1)
+    {
+        sample = pgm_read8(&sin_table[SIN_TABLE_END - index]);
+    }
+    else
+    {
+        sample = pgm_read8(&sin_table[index]);
+        __asm__ __volatile__ (
+            "nop" "\n\t");
+    }
 
     uint16_t tmp = (sample * volume);
     sample = (tmp >> 8);
 
     return phase & 2 ? 127 - sample : 128 + sample;
-#else
-	ASSERT(idx < SIN_LEN);
-	uint16_t new_idx = idx % (SIN_LEN / 2);
-	new_idx = (new_idx >= (SIN_LEN / 4)) ? (SIN_LEN / 2 - new_idx - 1) : new_idx;
-
-	uint8_t data = pgm_read8(&sin_table[new_idx]);
-
-	return (idx >= (SIN_LEN / 2)) ? (255 - data) : data;
-#endif
 }
 
 
@@ -251,21 +249,22 @@ void afsk_tx_bottom_half(Afsk* af)
 // Only called in ISR context.
 INLINE int8_t get_next_bit(Afsk *af)
 {
-    if ((af->status & 16) != 0)
+    if (LIKELY((af->status & 16) == 0))
     {
-        if ((af->status & 3) == 2)
-        {
-            af->sampled_bits ^= 1;
-            return af->sampled_bits;
-        }
-        else
-        {
-            return (af->status & 1);
-        }
+        return fifo_isempty(&af->tx_bit_fifo) ?
+            -1 : (int8_t) fifo_pop(&af->tx_bit_fifo);
     }
 
-    return fifo_isempty(&af->tx_bit_fifo) ?
-        -1 : (int8_t) fifo_pop(&af->tx_bit_fifo);
+    switch(af->status)
+    {
+    case HDLC_TEST_SPACE:
+        return 0;
+    case HDLC_TEST_MARK:
+        return 1;
+    default: // case HDLC_TEST_BOTH:
+        af->sampled_bits ^= 1;
+        return af->sampled_bits;
+    }
 }
 
 /**
@@ -279,8 +278,6 @@ INLINE int8_t get_next_bit(Afsk *af)
  */
 uint8_t afsk_dac_isr(Afsk *af)
 {
-	AFSK_STROBE_ON();
-
 	/* Check if we are at a start of a sample cycle */
 	if (af->sample_count == 0)
 	{
@@ -302,7 +299,7 @@ uint8_t afsk_dac_isr(Afsk *af)
 			af->phase_inc = SPACE_INC;
 			break;
 		}
-	}
+    }
 
 	/* Get new sample and put it out on the DAC */
 	af->phase_acc += af->phase_inc;
@@ -365,6 +362,7 @@ static size_t afsk_write(KFile *fd, const void *_buf, size_t size)
             af->phase_acc = 0;
             af->sending = true;
             AFSK_DAC_IRQ_START (af);
+            AFSK_STROBE_ON();
         }
 	}
 
@@ -442,6 +440,7 @@ void afsk_test_tx_start(KFile *fd, int8_t hdlc_status)
             af->phase_acc = 0;
             af->sending = true;
             AFSK_DAC_IRQ_START (af);
+            AFSK_STROBE_ON();
         }
     );
 }
