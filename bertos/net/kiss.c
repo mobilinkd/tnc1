@@ -99,6 +99,7 @@
 #define SEND_BOTH               9
 #define STOP_TX                10
 #define RESET                  11
+#define GET_OUTPUT_VOLUME      12
 
 extern uint8_t wdt_location;
 
@@ -200,6 +201,15 @@ static void send_input_volume(KissCtx* k)
     kfile_flush(k->serial);
 }
 
+static void send_output_volume(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_OUTPUT_VOLUME;
+    buf[1] = k->params.output_volume;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
 static void kiss_decode_hw_command(KissCtx * k)
 {
     // PARAMS are saved by the caller.
@@ -247,6 +257,10 @@ static void kiss_decode_hw_command(KissCtx * k)
         break;
     case STOP_TX:
         afsk_test_tx_end(k->modem);
+        break;
+    case GET_OUTPUT_VOLUME:
+        afsk_test_tx_end(k->modem);
+        send_output_volume(k);
         break;
     }
 }
