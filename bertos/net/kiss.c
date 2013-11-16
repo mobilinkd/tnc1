@@ -44,6 +44,7 @@
 #include "kiss.h"
 #include "hw/hw_kiss.h"
 #include "cfg/cfg_kiss.h"
+#include "buildrev.h"
 
 #include "hc-05.h"
 
@@ -100,6 +101,29 @@
 #define STOP_TX                10
 #define RESET                  11
 #define GET_OUTPUT_VOLUME      12
+#define GET_INPUT_VOLUME       13
+#define GET_SQUELCH_LEVEL      14
+
+#define GET_TXDELAY            33
+#define GET_PERSIST            34
+#define GET_TIMESLOT           35
+#define GET_TXTAIL             36
+#define GET_DUPLEX             37
+
+#define GET_FIRMWARE_VERSION   40
+#define GET_HARDWARE_VERSION   41
+
+#define SET_BLUETOOTH_NAME     65
+#define GET_BLUETOOTH_NAME     66
+#define SET_BLUETOOTH_PIN      67   // Danger Will Robinson.
+#define GET_BLUETOOTH_PIN      68
+#define SET_BT_CONN_TRACK      69   // Bluetooth connection tracking
+#define GET_BT_CONN_TRACK      70   // Bluetooth connection tracking
+#define SET_BT_MAJOR_CLASS     71   // Bluetooth Major Class
+#define GET_BT_MAJOR_CLASS     72   // Bluetooth Major Class
+
+#define GET_ALL_VALUES        127   // Send all settings & versions.
+
 
 extern uint8_t wdt_location;
 
@@ -210,6 +234,94 @@ static void send_output_volume(KissCtx* k)
     kfile_flush(k->serial);
 }
 
+static void send_squelch_level(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_SQUELCH_LEVEL;
+    buf[1] = k->params.squelch;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_txdelay(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_TXDELAY;
+    buf[1] = k->params.txdelay;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_persist(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_PERSIST;
+    buf[1] = k->params.persist;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_timeslot(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_TIMESLOT;
+    buf[1] = k->params.slot;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_txtail(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_TXTAIL;
+    buf[1] = k->params.txtail;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_duplex(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_DUPLEX;
+    buf[1] = k->params.duplex;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+#define STRINGIFY(X) #X
+#define TO_STRING(x) " "STRINGIFY(x)
+
+static void send_firmware_version(KissCtx* k)
+{
+    const size_t len = sizeof(TO_STRING(BUILD_VERS));
+    uint8_t buf[sizeof(TO_STRING(BUILD_VERS))];
+    memcpy(buf, TO_STRING(BUILD_VERS), len);
+    buf[0] = GET_FIRMWARE_VERSION;
+    kiss_tx_to_serial(k, HARDWARE, buf, len);
+    kfile_flush(k->serial);
+}
+
+static void send_hardware_version(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_HARDWARE_VERSION;
+    buf[1] = 1;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_all_values(KissCtx* k)
+{
+    send_hardware_version(k);
+    send_firmware_version(k);
+    send_txdelay(k);
+    send_persist(k);
+    send_timeslot(k);
+    send_duplex(k);
+    send_output_volume(k);
+    send_squelch_level(k);
+}
+
 static void kiss_decode_hw_command(KissCtx * k)
 {
     // PARAMS are saved by the caller.
@@ -261,6 +373,46 @@ static void kiss_decode_hw_command(KissCtx * k)
     case GET_OUTPUT_VOLUME:
         afsk_test_tx_end(k->modem);
         send_output_volume(k);
+        break;
+    case GET_INPUT_VOLUME:
+        afsk_test_tx_end(k->modem);
+        send_input_volume(k);
+        break;
+    case GET_SQUELCH_LEVEL:
+        afsk_test_tx_end(k->modem);
+        send_squelch_level(k);
+        break;
+    case GET_TXDELAY:
+        afsk_test_tx_end(k->modem);
+        send_txdelay(k);
+        break;
+    case GET_PERSIST:
+        afsk_test_tx_end(k->modem);
+        send_persist(k);
+        break;
+    case GET_TIMESLOT:
+        afsk_test_tx_end(k->modem);
+        send_timeslot(k);
+        break;
+    case GET_TXTAIL:
+        afsk_test_tx_end(k->modem);
+        send_txtail(k);
+        break;
+    case GET_DUPLEX:
+        afsk_test_tx_end(k->modem);
+        send_duplex(k);
+        break;
+    case GET_FIRMWARE_VERSION:
+        afsk_test_tx_end(k->modem);
+        send_firmware_version(k);
+        break;
+    case GET_HARDWARE_VERSION:
+        afsk_test_tx_end(k->modem);
+        send_hardware_version(k);
+        break;
+    case GET_ALL_VALUES:
+        afsk_test_tx_end(k->modem);
+        send_all_values(k);
         break;
     }
 }
