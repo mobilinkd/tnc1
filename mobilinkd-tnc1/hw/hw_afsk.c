@@ -61,9 +61,8 @@ typedef struct DCFilter
 static DCFilter dc_filter;
 
 /**
- * Takes a normalized ADC (-512/+511) value and computes the attenuation
- * required to keep the average volume within (-128/+127) and returns the
- * attenuated result.
+ * Takes a normalized ADC (-512/+511) value and computes the attenuated
+ * value, clamps the input within [-128/+127] and returns the result.
  */
 INLINE int8_t input_attenuation(Afsk* af, int16_t adc)
 {
