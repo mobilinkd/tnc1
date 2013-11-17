@@ -156,7 +156,7 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
         extern bool hw_afsk_dac_isr; \
         PORTB |= BV(2); \
         hw_afsk_dac_isr = true; \
-        TCCR1B = 0; \
+        ADCSRA &= ~BV(ADIE); \
         TCCR0B = BV(CS00); \
     } while (0)
 #endif
@@ -191,7 +191,7 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
         PORTB &= ~BV(2); \
         hw_afsk_dac_isr = false; \
         TCCR0B = 0; \
-        TCCR1B = BV(CS11) | BV(WGM13) | BV(WGM12); \
+        ADCSRA |= BV(ADIE); \
     } while (0)
 #endif
 
