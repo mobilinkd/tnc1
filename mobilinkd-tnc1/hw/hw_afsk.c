@@ -38,6 +38,7 @@
 
 
 #include "hw_afsk.h"
+#include "mobilinkd_error.h"
 
 #include <net/afsk.h>
 #include <cpu/irq.h>
@@ -46,19 +47,6 @@
 #include <avr/interrupt.h>
 
 #include <string.h>
-
-#define DC_FILTER_SHIFT 5
-#define DC_FILTER_SIZE 32
-
-typedef struct DCFilter
-{
-    int8_t buffer[32];
-    uint8_t pos;
-    uint8_t tail;
-    uint8_t count;
-} DCFilter;
-
-static DCFilter dc_filter;
 
 /**
  * Takes a normalized ADC (-512/+511) value and computes the attenuated
@@ -74,55 +62,30 @@ INLINE int8_t input_attenuation(Afsk* af, int16_t adc)
     return result;
 }
 
-INLINE void capture(Afsk* af, int16_t adc)
-{
-    int8_t min = 127;
-    int8_t max = -128;
-    int16_t avg = 0;
-
-    for (size_t i = 0; i < DC_FILTER_SIZE; ++i)
-    {
-        const int8_t tmp = dc_filter.buffer[i];
-        min = tmp < min ? tmp : min;
-        max = tmp > max ? tmp : max;
-        avg += tmp;
-    }
-
-    avg >>= DC_FILTER_SHIFT;
-
-    af->input_volume = max - min;
-
-    if ((af->input_volume) >= af->squelch_level)
-    {
-        carrier_on(af);
-    }
-    else
-    {
-        carrier_off(af);
-    }
-
-    afsk_adc_isr(af, dc_filter.buffer[dc_filter.pos] - avg);
-
-    dc_filter.buffer[dc_filter.pos++] = input_attenuation(af, adc - 512);
-    if (dc_filter.pos == DC_FILTER_SIZE) dc_filter.pos = 0;
-}
-
 /*
  * Here we are using only one modem. If you need to receive
  * from multiple modems, you need to define an array of contexts.
  */
 static Afsk *ctx;
 
-
+/**
+ * Initialize the ADC.  The ADC runs at its slowest rate (125KHz) to
+ * ensure best resolution possible.
+ *
+ * - The AVCC (3.3V) voltage reference is used.
+ * - The prescaler is set to 125KHz, and set to free-running mode, providing
+ *   almost exactly 9600 conversions per second.
+ * - The signal source is set to the given ADC channel.
+ * - The ADC channel is set to input with digital input disabled.
+ * - The ADC interrupt is enabled.
+ *
+ * @param ch
+ * @param _ctx
+ */
 void hw_afsk_adcInit(int ch, Afsk *_ctx)
 {
 	ctx = _ctx;
 	ASSERT(ch <= 5);
-
-	dc_filter.pos = 0;
-	dc_filter.tail = DC_FILTER_SIZE;
-	dc_filter.count = 0;
-	memset(dc_filter.buffer, 0x80, DC_FILTER_SIZE);
 
 	AFSK_STROBE_INIT();
 	AFSK_STROBE_OFF();
@@ -148,12 +111,24 @@ void hw_afsk_adcInit(int ch, Afsk *_ctx)
 
 bool hw_afsk_dac_isr;
 
-/*
- * This is how you declare an ISR.
+/**
+ * The ADC interrupt.  This is called 9600 times a second while input
+ * capture is enabled.  The data is pulled from the ADC, attenuated,
+ * and the attenuated value is placed on the ADC FIFO.  This will then
+ * be processed by the bottom-half handler outside the interrupt
+ * context.
+ *
+ * If the ADC FIFO overflows, the error is recorded and the TNC is reset.
  */
 DECLARE_ISR(ADC_vect)
 {
-	capture(ctx, ADC);
+    if (fifo_isfull(&ctx->adc_fifo))
+    {
+        return; // Happens during init and during serial IO.
+        // mobilinkd_abort(MOBILINKD_ERROR_AFSK_ADC_OVERFLOW);
+    }
+
+    fifo_push(&ctx->adc_fifo, (uint8_t) input_attenuation(ctx, ADC - 512));
 }
 
 #if CONFIG_AFSK_PWM_TX == 1

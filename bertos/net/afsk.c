@@ -124,6 +124,46 @@ INLINE uint8_t sin_sample(uint16_t idx, uint8_t volume)
 #define BIT_DIFFER(bitline1, bitline2) (((bitline1) ^ (bitline2)) & 0x01)
 #define EDGE_FOUND(bitline)            BIT_DIFFER((bitline), (bitline) >> 1)
 
+INLINE void capture(Afsk* af, int8_t adc)
+{
+    int8_t min = 127;
+    int8_t max = -128;
+    int16_t avg = 0;
+
+    for (size_t i = 0; i < DC_FILTER_SIZE; ++i)
+    {
+        const int8_t tmp = af->dc_filter.buffer[i];
+        min = tmp < min ? tmp : min;
+        max = tmp > max ? tmp : max;
+        avg += tmp;
+    }
+
+    avg >>= DC_FILTER_SHIFT;
+
+    af->input_volume = max - min;
+
+    afsk_adc_isr(af, af->dc_filter.buffer[af->dc_filter.pos]);
+
+    AfskDcd_detect(&af->afskDcd, adc, avg);
+    if (AfskDcd_dcd(&af->afskDcd))
+        carrier_on(af);
+    else
+        carrier_off(af);
+
+    af->dc_filter.buffer[af->dc_filter.pos++] = adc - avg;
+    if (af->dc_filter.pos == DC_FILTER_SIZE) af->dc_filter.pos = 0;
+}
+
+// Never called from ISR.
+void afsk_rx_bottom_half(Afsk* af)
+{
+    while (!fifo_isempty_locked(&af->adc_fifo))
+    {
+        capture(af, (int8_t) fifo_pop_locked(&af->adc_fifo));
+    }
+}
+
+
 /**
  * ADC ISR callback.
  * This function has to be called by the ADC ISR when a sample of the configured
@@ -135,7 +175,7 @@ void afsk_adc_isr(Afsk *af, int8_t curr_sample)
 {
 	uint8_t this_bit = 0;
 
-	if (af->status & 16) return;
+	if (af->status & 16) return;        // Test/configuration mode.
 
 	if (!carrier_present(af))
 	{
@@ -315,6 +355,8 @@ static size_t afsk_read(KFile *fd, void *_buf, size_t size)
 	Afsk *af = AFSK_CAST(fd);
 	uint8_t *buf = (uint8_t *)_buf;
 
+	afsk_rx_bottom_half(af);
+
 	#if CONFIG_AFSK_RXTIMEOUT == 0
 	while (size-- && !fifo_isempty_locked(&af->rx_fifo))
 	#else
@@ -327,6 +369,7 @@ static size_t afsk_read(KFile *fd, void *_buf, size_t size)
 
 		while (fifo_isempty_locked(&af->rx_fifo))
 		{
+		    afsk_rx_bottom_half(af);
 			cpu_relax();
 			#if CONFIG_AFSK_RXTIMEOUT != -1
 			if (timer_clock() - start > ms_to_ticks(CONFIG_AFSK_RXTIMEOUT))
@@ -452,6 +495,12 @@ void afsk_test_tx_end(KFile *fd)
     af->sampled_bits = 0;
 }
 
+INLINE void DCFilter_init(DCFilter* dc_filter)
+{
+    dc_filter->pos = 0;
+    memset(dc_filter->buffer, 0, sizeof(dc_filter->buffer));
+}
+
 /**
  * Initialize an AFSK1200 modem.
  * \param af Afsk context to operate on.
@@ -463,12 +512,15 @@ void afsk_init(Afsk *af, int adc_ch, int dac_ch)
 	#if CONFIG_AFSK_RXTIMEOUT != -1
 	MOD_CHECK(timer);
 	#endif
+
 	memset(af, 0, sizeof(*af));
 	af->adc_ch = adc_ch;
 	af->dac_ch = dac_ch;
 
 	fifo_init(&af->delay_fifo, (uint8_t *)af->delay_buf, sizeof(af->delay_buf));
 	fifo_init(&af->rx_fifo, af->rx_buf, sizeof(af->rx_buf));
+    fifo_init(&af->adc_fifo, (uint8_t *)af->adc_buffer, sizeof(af->adc_buffer));
+    DCFilter_init(&af->dc_filter);
 
 	/* Fill sample FIFO with 0 */
 	for (int i = 0; i < SAMPLEPERBIT / 2; i++)
@@ -494,4 +546,6 @@ void afsk_init(Afsk *af, int adc_ch, int dac_ch)
 	af->fd.error = afsk_error;
 	af->fd.clearerr = afsk_clearerr;
 	af->phase_inc = MARK_INC;
+
+	AfskDcd_init(&af->afskDcd);
 }
