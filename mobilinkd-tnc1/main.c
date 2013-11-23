@@ -64,6 +64,7 @@
 
 #include "buildrev.h"
 #include "hc-05.h"
+#include "battery.h"
 #include "mobilinkd_error.h"
 
 static Afsk afsk;
@@ -110,9 +111,13 @@ static void init(void)
 
     int hc_status = init_hc05(&ser.fd);
 
+    uint16_t voltage = check_battery();
+    voltage /= 10;
+
     // Announce
     kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");
     kfile_printf(&ser.fd, "== Version 1.2, Build %d\r\n", VERS_BUILD);
+    kfile_printf(&ser.fd, "== Voltage = %umV\r\n", voltage);
     kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
     kfile_print(&ser.fd, "== ");
     kfile_print(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
