@@ -1,4 +1,4 @@
-// Copyright 2013 Rob Riggs <rob@pangalactic.org>
+// Copyright 2013 Mobilinkd LLC <info@mobilinkd.com>
 // All rights reserved.
 
 #include <avr/wdt.h>
