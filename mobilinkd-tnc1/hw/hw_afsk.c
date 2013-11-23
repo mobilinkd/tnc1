@@ -38,6 +38,7 @@
 
 
 #include "hw_afsk.h"
+#include "mobilinkd_error.h"
 
 #include <net/afsk.h>
 #include <cpu/irq.h>
@@ -47,50 +48,18 @@
 
 #include <string.h>
 
-#define DC_FILTER_SHIFT 5
-#define DC_FILTER_SIZE 32
-
-typedef struct DCFilter
+/**
+ * Takes a normalized ADC (-512/+511) value and computes the attenuated
+ * value, clamps the input within [-128/+127] and returns the result.
+ */
+INLINE int8_t input_attenuation(Afsk* af, int16_t adc)
 {
-    uint8_t buffer[32];
-    uint8_t pos;
-    uint8_t tail;
-    uint8_t count;
-} DCFilter;
+    int16_t result = (adc >> af->input_volume_gain);
 
-static DCFilter dc_filter;
+    if (result < -128) result = -128;
+    else if (result > 127) result = 127;
 
-INLINE void capture(Afsk* af, int16_t adc)
-{
-    int16_t avg = 0;
-    uint8_t min = 255;
-    uint8_t max = 0;
-
-    for (size_t i = 0; i < DC_FILTER_SIZE; ++i)
-    {
-        const uint8_t tmp = dc_filter.buffer[i];
-        avg += tmp;
-        min = tmp < min ? tmp : min;
-        max = tmp > max ? tmp : max;
-    }
-
-    avg >>= DC_FILTER_SHIFT;
-
-    if ((max - min) >= af->squelch_level)
-    {
-        carrier_on(af);
-    }
-    else
-    {
-        carrier_off(af);
-    }
-
-    af->input_volume = max - min;
-
-    afsk_adc_isr(af, dc_filter.buffer[dc_filter.pos] - avg);
-
-    dc_filter.buffer[dc_filter.pos++] = (adc >> 2);
-    if (dc_filter.pos == DC_FILTER_SIZE) dc_filter.pos = 0;
+    return result;
 }
 
 /*
@@ -99,48 +68,67 @@ INLINE void capture(Afsk* af, int16_t adc)
  */
 static Afsk *ctx;
 
+/**
+ * Initialize the ADC.  The ADC runs at its slowest rate (125KHz) to
+ * ensure best resolution possible.
+ *
+ * - The AVCC (3.3V) voltage reference is used.
+ * - The prescaler is set to 125KHz, and set to free-running mode, providing
+ *   almost exactly 9600 conversions per second.
+ * - The signal source is set to the given ADC channel.
+ * - The ADC channel is set to input with digital input disabled.
+ * - The ADC interrupt is enabled.
+ *
+ * @param ch
+ * @param _ctx
+ */
 void hw_afsk_adcInit(int ch, Afsk *_ctx)
 {
 	ctx = _ctx;
 	ASSERT(ch <= 5);
 
-	dc_filter.pos = 0;
-	dc_filter.tail = DC_FILTER_SIZE;
-	dc_filter.count = 0;
-	memset(dc_filter.buffer, 0x80, DC_FILTER_SIZE);
-
 	AFSK_STROBE_INIT();
 	AFSK_STROBE_OFF();
-	/* Set prescaler to clk/8 (2 MHz), CTC, top = ICR1 */
-	TCCR1A = 0;
-	TCCR1B = BV(CS11) | BV(WGM13) | BV(WGM12);
-	/* Set max value to obtain a 9600Hz freq */
-	ICR1 = ((CPU_FREQ / 8) / 9600) - 1;
 
-	/* Set reference to AVCC (5V), select CH */
-	ADMUX = BV(REFS0) | ch;
+    /* Set reference to AVCC (3.3V) and select ADC channel. */
+    ADMUX = BV(REFS0) | ch;
 
-	DDRC &= ~BV(ch);
-	PORTC &= ~BV(ch);
-	DIDR0 |= BV(ch);
+    DDRC &= ~BV(ch);
+    PORTC &= ~BV(ch);
+    DIDR0 |= BV(ch);
 
-	/* Set autotrigger on Timer1 Input capture flag */
-	ADCSRB = BV(ADTS2) | BV(ADTS1) | BV(ADTS0);
-	/* Enable ADC, autotrigger, 1MHz, IRQ enabled */
-	/* We are using the ADC a bit out of specifications otherwise it's not fast enough for our
-	 * purposes */
-	ADCSRA = BV(ADEN) | BV(ADSC) | BV(ADATE) | BV(ADIE) | BV(ADPS2);
+    // Set prescaler to 128 so we have a 125KHz clock source.
+    // This provides almost exactly 9600 conversions a second.
+    ADCSRA = (BV(ADPS2) | BV(ADPS1) | BV(ADPS0));
+
+    // Put the ADC into free-running mode.
+    ADCSRB &= ~(BV(ADTS2) | BV(ADTS1) | BV(ADTS0));
+
+    // Set signal source to free running, start the ADC, start
+    // conversion and enable interrupt.
+    ADCSRA |= (BV(ADATE) | BV(ADEN) | BV(ADSC) | BV(ADIE));
 }
 
 bool hw_afsk_dac_isr;
 
-/*
- * This is how you declare an ISR.
+/**
+ * The ADC interrupt.  This is called 9600 times a second while input
+ * capture is enabled.  The data is pulled from the ADC, attenuated,
+ * and the attenuated value is placed on the ADC FIFO.  This will then
+ * be processed by the bottom-half handler outside the interrupt
+ * context.
+ *
+ * If the ADC FIFO overflows, the error is recorded and the TNC is reset.
  */
 DECLARE_ISR(ADC_vect)
 {
-	TIFR1 = BV(ICF1);
-	capture(ctx, ADC);
+    if (fifo_isfull(&ctx->adc_fifo))
+    {
+        return; // Happens during init and during serial IO.
+        // mobilinkd_abort(MOBILINKD_ERROR_AFSK_ADC_OVERFLOW);
+    }
+
+    fifo_push(&ctx->adc_fifo, (uint8_t) input_attenuation(ctx, ADC - 512));
 }
 
 #if CONFIG_AFSK_PWM_TX == 1

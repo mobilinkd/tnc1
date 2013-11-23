@@ -64,6 +64,7 @@
 
 #include "buildrev.h"
 #include "hc-05.h"
+#include "mobilinkd_error.h"
 
 static Afsk afsk;
 static Serial ser;
@@ -72,58 +73,65 @@ static KissCtx kiss;
 #define ADC_CH 0
 
 uint8_t mcusr_mirror __attribute__ ((section (".noinit")));
-uint8_t wdt_location __attribute__ ((section (".noinit")));
+volatile uint8_t wdt_location __attribute__ ((section (".noinit")));
 
 void get_mcusr(void) __attribute__((naked))
 __attribute__((section(".init3")));
 void get_mcusr(void)
 {
-	mcusr_mirror = MCUSR;
-	MCUSR = 0;
-	wdt_disable();
+    mcusr_mirror = MCUSR;
+    MCUSR = 0;
+    wdt_disable();
 }
 
 /**
- * Module initialse
+ * Initialize the module.  Initialize the following subsystems:
  *
+ * - kernel debugging
+ * - timer
+ * - serial UART0
+ * - Bluetooth module
+ * - AFSK driver
+ * - KISS driver
+ *
+ * The AFSK module should be initialized after the startup banner is
+ * printed to reduce the chance of a buffer overrun.
  */
 static void init(void)
 {
 
-	IRQ_ENABLE;
-	kdbg_init();
-	timer_init();
+    IRQ_ENABLE;
+    kdbg_init();
+    timer_init();
 
-	/* Initialize serial port */
-	ser_init(&ser, SER_UART0);
-	ser_setbaudrate(&ser, 38400L);
+    /* Initialize serial port */
+    ser_init(&ser, SER_UART0);
+    ser_setbaudrate(&ser, 38400L);
 
-	int hc_status = init_hc05(&ser.fd);
+    int hc_status = init_hc05(&ser.fd);
 
-	// Init afsk demodulator
-	afsk_init(&afsk, ADC_CH, 0);
+    // Announce
+    kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");
+    kfile_printf(&ser.fd, "== Version 1.2, Build %d\r\n", VERS_BUILD);
+    kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
+    kfile_print(&ser.fd, "== ");
+    kfile_print(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
+    kfile_print(&ser.fd, "\r\n");
+    wdt_location = 0;
 
-	// Init KISS context
-	kiss_init(&kiss, &afsk.fd, &ser.fd);
+    if (hc_status != 0)
+        kfile_printf(&ser.fd, "== HC-05 = %02x\r\n", hc_status);
+    kfile_print(&ser.fd, "== Starting.\r\n");
 
-	// Announce
-	kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");
-	kfile_printf(&ser.fd, "== Version 1.2, Build %d\r\n", VERS_BUILD);
-	if (mcusr_mirror & 8)
-	{
-		kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
-	}
-	else
-	{
-		wdt_location = 0;
-	}
+    mobilinkd_set_error(MOBILINKD_ERROR_WATCHDOG_TIMEOUT);
 
-	// if (hc_status != 0)
-	kfile_printf(&ser.fd, "== HC-05 = %02x\r\n", hc_status);
+    afsk_init(&afsk, ADC_CH, 0);
+    wdt_location = 1;
 
-	kfile_print(&ser.fd, "== Starting.\r\n");
+    kiss_init(&kiss, &afsk.fd, &ser.fd);
+    wdt_location = 2;
 
-	wdt_enable(WDTO_4S);
+    wdt_enable(WDTO_4S);
 }
 
 /**
@@ -133,17 +141,19 @@ static void init(void)
  */
 int main(void)
 {
-	init();
+    init();
 
-	while (1)
-	{
-		wdt_location = 1;
-		// Use KISS module call to check AFSK and serial objects for incoming data
-		kiss_poll_modem(&kiss);
-		wdt_location = 129;
-		kiss_poll_serial(&kiss);
-		afsk_tx_bottom_half(&afsk);
-		wdt_reset();
-	}
-	return 0;
+    while (1)
+    {
+        wdt_location = 3;
+        afsk_rx_bottom_half(&afsk);
+        wdt_location = 4;
+        kiss_poll_modem(&kiss);
+        wdt_location = 5;
+        kiss_poll_serial(&kiss);
+        wdt_location = 6;
+        afsk_tx_bottom_half(&afsk);
+        wdt_reset();
+    }
+    return 0;
 }

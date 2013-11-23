@@ -46,6 +46,7 @@
 #include "cfg/cfg_afsk.h"
 #include "hw/hw_afsk.h"
 #include "hdlc.h"
+#include "afsk_dcd.h"
 
 #include <cfg/compiler.h>
 
@@ -71,10 +72,15 @@
 
 #define SAMPLEPERBIT (SAMPLERATE / BITRATE)
 
-/**
- * RX FIFO buffer full error.
- */
-#define AFSK_RXFIFO_OVERRUN BV(0)
+
+#define DC_FILTER_SHIFT 5
+#define DC_FILTER_SIZE 32
+
+typedef struct DCFilter
+{
+    int8_t buffer[DC_FILTER_SIZE];
+    uint8_t pos;
+} DCFilter;
 
 /**
  * AFSK1200 modem context.
@@ -114,11 +120,20 @@ typedef struct Afsk
 	 */
 	int8_t delay_buf[SAMPLEPERBIT / 2 + 1];
 
+    /** FIFO for raw ADC data */
+    FIFOBuffer adc_fifo;
+
+    /** FIFO raw ADC buffer */
+    int8_t adc_buffer[8];
+
 	/** FIFO for received data */
 	FIFOBuffer rx_fifo;
 
 	/** FIFO rx buffer */
 	uint8_t rx_buf[CONFIG_AFSK_RX_BUFLEN];
+
+    /** DC filter struct */
+    DCFilter dc_filter;
 
 	/** FIFO for transmitted data */
 	FIFOBuffer tx_fifo;
@@ -148,7 +163,7 @@ typedef struct Afsk
 	 */
 	int8_t curr_phase;
 
-		/** True while modem sends data */
+	/** True while modem sends data */
 	volatile bool sending;
 
 	/**
@@ -167,6 +182,7 @@ typedef struct Afsk
 	uint8_t output_volume;
 	uint8_t squelch_level;
 
+	AfskDcd afskDcd;
 } Afsk;
 
 #define KFT_AFSK MAKE_ID('A', 'F', 'S', 'K')
@@ -243,6 +259,7 @@ uint8_t afsk_dac_isr (Afsk * af);
 void afsk_set_timings (Afsk * af, uint8_t txhead, uint8_t txtail);
 void afsk_init (Afsk * af, int adc_ch, int dac_ch);
 
+void afsk_rx_bottom_half(Afsk* af);
 void afsk_tx_bottom_half(Afsk* af);
 
 #define HEAD   1

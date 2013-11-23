@@ -180,8 +180,11 @@ static void load_params(KissCtx * k)
 INLINE void kiss_tx_buffer_to_serial(
     KissCtx* k, uint8_t* buf, uint16_t len)
 {
+    Afsk* afsk = AFSK_CAST(k->modem);
+
     for (uint16_t i = 0; i < len; i++)
     {
+        afsk_rx_bottom_half(afsk);
         uint8_t c = buf[i];
         switch (c)
         {

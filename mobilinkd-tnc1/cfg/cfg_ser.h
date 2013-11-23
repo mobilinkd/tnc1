@@ -63,7 +63,7 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 2
  */
-#define CONFIG_UART0_RXBUFSIZE  512
+#define CONFIG_UART0_RXBUFSIZE  256
 
 /**
  * Enable port 1
