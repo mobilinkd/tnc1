@@ -83,6 +83,7 @@ typedef struct KissCtx
 	ticks_t last_tick;                           ///< timestamp of last byte into tx_buf
 	ticks_t p_tick;                              ///< p-persistence timestamp.
     ticks_t tx_wait_tick;                        ///< timestamp started waiting to tx.
+    uint8_t escape_count;                        ///< number of consecutive escape chars.
     Params params;                               ///< Operational KISS Parameters that control transmission
 } KissCtx;
 

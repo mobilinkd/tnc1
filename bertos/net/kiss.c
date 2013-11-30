@@ -710,10 +710,26 @@ void kiss_poll_serial(KissCtx * k)
             {
                 kiss_change_state(k, WAIT_FOR_COMMAND);
                 k->tx_pos = 0;
+                k->escape_count = 0;
+                break;
             }
-            else if (c == ESCAPE)
+            // Bootloader require <esc>S<esc>S<esc>S<esc>S sequence.
+            else if ((c == ESCAPE) && ((k->escape_count & 1) == 0))
             {
-                reboot();
+                k->escape_count++;
+                break;
+            }
+            else if ((c == 'S') && ((k->escape_count & 1) == 1))
+            {
+                k->escape_count++;
+                kfile_putc('?', k->serial);
+                kfile_flush(k->serial);
+                if (k->escape_count == 8) reboot();
+                break;
+            }
+            else
+            {
+                k->escape_count = 0;
             }
             break;
         case WAIT_FOR_COMMAND:
