@@ -6,12 +6,13 @@
 
 /**
  * Check the battery level.  The value returned represents the voltage
- * in 100uV units.  For example, a return value of 37200 represents
- * 3.72 volts.
+ * in milliVolts.  For example, a return value of 3720 represents 3720mV
+ * or 3.72 Volts.
  *
- * @note While result returned is in 100uV units, the resolution is 6.4mV.
+ * @note While result returned is in mV units, the resolution is at best
+ *  6.4mV and the accuracy is much less.
  *
- * @return An integer representing the battery voltage in 100uV units.
+ * @return An integer representing the battery voltage in milliVolts.
  */
 uint16_t check_battery(void);
 

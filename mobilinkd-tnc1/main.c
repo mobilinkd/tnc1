@@ -112,7 +112,6 @@ static void init(void)
     int hc_status = init_hc05(&ser.fd);
 
     uint16_t voltage = check_battery();
-    voltage /= 10;
 
     // Announce
     kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");

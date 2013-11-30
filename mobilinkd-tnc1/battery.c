@@ -12,14 +12,14 @@
 
 uint16_t check_battery()
 {
-    uint16_t result = 0;
+    uint32_t adc = 0;
 
     // Disable interrupts.
     cli();
     // Save current ADC state.
-    uint8_t ADCSRA_save = ADCSRA;
-    uint8_t ADCSRB_save = ADCSRB;
-    uint8_t ADMUX_save = ADMUX;
+    uint8_t adcsa = ADCSRA;
+    uint8_t adcsrb = ADCSRB;
+    uint8_t admux = ADMUX;
     // Set prescaler to 128 and enable ADC.
     ADCSRA = (BV(ADPS2) | BV(ADPS1) | BV(ADPS0) | BV(ADEN));
     // Put the ADC into free-running mode.
@@ -30,19 +30,27 @@ uint16_t check_battery()
     ADMUX = (BV(REFS0) | BV(ADLAR) | 1);
     // Enable interrupts.
     sei();
-    // Start ADC one-shot.
-    ADCSRA |= BV(ADSC);
-    // Busy wait for result.
-    while (ADCSRA & BV(ADSC));
-    result = ADC;
+    // Read ADC until it stabilizes.
+    uint32_t prev = 0;
+    uint8_t count = 0;
+    do {
+        prev = adc;
+        // Start ADC one-shot.
+        ADCSRA |= BV(ADSC);
+        // Busy wait for result and ignore the first result.
+        while (ADCSRA & BV(ADSC));
+        adc = ADC;
+    } while ((prev != adc) && (++count != 10));
     // Disable interrupts.
     cli();
     // Restore ADC state.
-    ADMUX = ADMUX_save;
-    ADCSRA = ADCSRA_save;
-    ADCSRB = ADCSRB_save;
+    ADMUX = admux;
+    ADCSRA = adcsa;
+    ADCSRB = adcsrb;
     // Enable interrupts.
     sei();
 
+    adc *= 100;
+    uint16_t result = adc / 976;
     return result;
 }
