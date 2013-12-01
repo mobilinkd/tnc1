@@ -15,10 +15,10 @@ OPTCFLAGS = -ffunction-sections -fdata-sections
 #OPTCFLAGS = -funsafe-loop-optimizations
 
 # For AVRStudio
-#DEBUGCFLAGS = -gdwarf-2
+DEBUGCFLAGS = -gdwarf-2
 
 # For GDB
-DEBUGCFLAGS = -ggdb
+#DEBUGCFLAGS = -ggdb
 
 #
 # define some variables based on the AVR base path in $(AVR)
