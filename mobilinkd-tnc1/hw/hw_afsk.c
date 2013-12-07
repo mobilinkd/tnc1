@@ -124,8 +124,8 @@ DECLARE_ISR(ADC_vect)
 {
     if (fifo_isfull(&ctx->adc_fifo))
     {
-        return; // Happens during init and during serial IO.
-        // mobilinkd_abort(MOBILINKD_ERROR_AFSK_ADC_OVERFLOW);
+        mobilinkd_set_error(MOBILINKD_ERROR_AFSK_ADC_OVERFLOW);
+        return;
     }
 
     fifo_push(&ctx->adc_fifo, (uint8_t) input_attenuation(ctx, ADC - 512));
