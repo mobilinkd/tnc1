@@ -205,13 +205,7 @@ INLINE void carrier_off(Afsk* af)
     AFSK_STROBE_OFF();
 }
 
-INLINE uint8_t carrier_present(const Afsk* af)
-{
-    if ((af->rx_hdlc.state != RX_WAIT_DATA) || !af->carrier)
-        return 0;
-    else
-        return 1;
-}
+INLINE uint8_t carrier_present(const Afsk* af) { return af->carrier; }
 
 /**
  * Set the output volume.  The output volume is a range from 0-255, with

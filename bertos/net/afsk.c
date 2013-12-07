@@ -177,7 +177,7 @@ void afsk_adc_isr(Afsk *af, int8_t curr_sample)
 
 	if (af->status & 16) return;        // Test/configuration mode.
 
-	if (af->squelch_level > 0 && !carrier_present(af))
+	if (!carrier_present(af))
 	{
 	    af->status = hdlc_flush(&af->rx_hdlc, &af->rx_fifo);
 	    return;
