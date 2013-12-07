@@ -16,8 +16,14 @@ uint16_t check_battery()
 
     // Disable interrupts.
     cli();
+
+    // Disable digital input
+    DDRC &= ~BV(1);
+    PORTC &= ~BV(1);
+    DIDR0 |= BV(1);
+
     // Save current ADC state.
-    uint8_t adcsa = ADCSRA;
+    uint8_t adcsra = ADCSRA;
     uint8_t adcsrb = ADCSRB;
     uint8_t admux = ADMUX;
     // Set prescaler to 128 and enable ADC.
@@ -45,7 +51,7 @@ uint16_t check_battery()
     cli();
     // Restore ADC state.
     ADMUX = admux;
-    ADCSRA = adcsa;
+    ADCSRA = adcsra;
     ADCSRB = adcsrb;
     // Enable interrupts.
     sei();
