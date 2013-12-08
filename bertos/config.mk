@@ -74,7 +74,7 @@ MAP_FLAGS_HOST =
 WARNFLAGS = \
 	-W -Wformat -Wall -Wundef -Wpointer-arith -Wcast-qual \
 	-Wcast-align -Wwrite-strings -Wsign-compare \
-	-Wmissing-noreturn \
+	-Wmissing-noreturn -Wextra \
 	-Wextra -Wstrict-aliasing=2 \
 #	-Wunsafe-loop-optimizations
 
