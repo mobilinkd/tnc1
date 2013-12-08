@@ -306,9 +306,9 @@ static void send_duplex(KissCtx* k)
 
 static void send_firmware_version(KissCtx* k)
 {
-    const size_t len = sizeof(TO_STRING(BUILD_VERS));
-    uint8_t buf[sizeof(TO_STRING(BUILD_VERS))];
-    memcpy(buf, TO_STRING(BUILD_VERS), len);
+    const size_t len = sizeof(TO_STRING(VERS_BUILD));
+    uint8_t buf[sizeof(TO_STRING(VERS_BUILD))];
+    memcpy(buf, TO_STRING(VERS_BUILD), len);
     buf[0] = GET_FIRMWARE_VERSION;
     kiss_tx_to_serial(k, HARDWARE, buf, len);
     kfile_flush(k->serial);
