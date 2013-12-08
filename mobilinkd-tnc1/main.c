@@ -162,10 +162,13 @@ int main(void)
     {
         if (mobilinkd_get_error() != MOBILINKD_ERROR_WATCHDOG_TIMEOUT)
         {
-            kfile_print_P(&ser.fd, PREFIX);
-            kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
-            kfile_print_P(&ser.fd, ENDL);
-            afsk_rx_bottom_half(&afsk);
+            if (kiss_get_verbosity(&kiss))
+            {
+                afsk_rx_bottom_half(&afsk);
+                kfile_print_P(&ser.fd, PREFIX);
+                kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
+                kfile_print_P(&ser.fd, ENDL);
+            }
             mobilinkd_set_error(MOBILINKD_ERROR_WATCHDOG_TIMEOUT);
         }
         wdt_location = 3;

@@ -50,7 +50,15 @@
 
 #include <io/kfile.h>
 
-
+#define CAP_DCD                     0x0001
+#define CAP_SQUELCH                 0x0002
+#define CAP_INPUT_ATTEN             0x0004
+#define CAP_FIRMWARE_VERSION        0x0008
+#define CAP_BATTERY_LEVEL           0x0010
+#define CAP_BT_CONN_TRACK           0x0020
+#define CAP_BT_NAME_CHANGE          0x0040
+#define CAP_BT_PIN_CHANGE           0x0080
+#define CAP_VERBOSE_ERROR           0x0100
 
 
 typedef struct Params
@@ -63,9 +71,12 @@ typedef struct Params
 	uint8_t output_volume;       ///< output volume (0-255)
 	uint8_t input_volume;        ///< input attenuation (future)
 	uint8_t squelch;             ///< input squelch level (0-255)
+	uint8_t options;             ///< boolean options
 	uint8_t chksum;              ///< Validity check of params data
 } Params;
 
+#define KISS_OPTION_CONN_TRACK  0x01
+#define KISS_OPTION_VERBOSE     0x02
 
 #define HW_CMD_BUFFER_SIZE 16
 
@@ -93,3 +104,15 @@ void kiss_init (KissCtx * k, KFile * channel, KFile * serial);
 void kiss_poll_serial (KissCtx * k);
 void kiss_poll_modem (KissCtx * k);
 
+INLINE void kiss_set_verbosity(KissCtx * k, uint8_t value)
+{
+    if (value)
+        k->params.options |= KISS_OPTION_VERBOSE;
+    else
+        k->params.options &= ~KISS_OPTION_VERBOSE;
+}
+
+INLINE uint8_t kiss_get_verbosity(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_VERBOSE) ? 1 : 0;
+}

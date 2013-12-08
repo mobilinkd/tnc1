@@ -110,6 +110,9 @@
 #define GET_INPUT_ATTEN        13
 #define GET_SQUELCH_LEVEL      14
 
+#define SET_VERBOSITY          16
+#define GET_VERBOSITY          17
+
 #define GET_TXDELAY            33
 #define GET_PERSIST            34
 #define GET_TIMESLOT           35
@@ -128,17 +131,17 @@
 #define SET_BT_MAJOR_CLASS     71   // Bluetooth Major Class
 #define GET_BT_MAJOR_CLASS     72   // Bluetooth Major Class
 
+#define GET_CAPABILITIES      126   // Send all capabilities.
 #define GET_ALL_VALUES        127   // Send all settings & versions.
 
 
 extern uint8_t wdt_location;
 
-
 static uint8_t checksum(KissCtx* k)
 {
     return ~(k->params.txdelay + k->params.persist + k->params.slot
         + k->params.txtail + k->params.duplex + k->params.output_volume
-        + k->params.input_volume + k->params.squelch);
+        + k->params.input_volume + k->params.squelch + k->params.options);
 }
 
 /**
@@ -179,6 +182,7 @@ static void load_params(KissCtx * k)
         k->params.output_volume = 128;
         k->params.input_volume = 2;
         k->params.squelch = 2;
+        k->params.options = 0;
         save_params(k);
     }
 }
@@ -367,6 +371,26 @@ static void send_battery_level(KissCtx* k)
     kfile_flush(k->serial);
 }
 
+static void send_verbosity(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_VERBOSITY;
+    buf[1] = kiss_get_verbosity(k);
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_capabilities(KissCtx* k)
+{
+    uint8_t buf[3];
+    buf[0] = GET_BT_CONN_TRACK;
+    buf[1] = CAP_DCD | CAP_BATTERY_LEVEL | CAP_FIRMWARE_VERSION | \
+        CAP_INPUT_ATTEN | CAP_SQUELCH;
+    buf[2] = (CAP_VERBOSE_ERROR) >> 8;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
 static void send_all_values(KissCtx* k)
 {
     send_hardware_version(k);
@@ -379,6 +403,8 @@ static void send_all_values(KissCtx* k)
     send_squelch_level(k);
     send_input_atten(k);
     send_battery_level(k);
+    send_verbosity(k);
+    send_capabilities(k);
 }
 
 static void kiss_decode_hw_command(KissCtx * k)
@@ -394,17 +420,19 @@ static void kiss_decode_hw_command(KissCtx * k)
     {
     case SET_OUTPUT_VOLUME:
         k->params.output_volume = value;
+        save_params(k);
         set_output_volume(k->modem, value);
         LOG_INFO("SET_OUTPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_INPUT_ATTEN:
         k->params.input_volume = value;
+        save_params(k);
         set_input_atten(k->modem, value);
         LOG_INFO("SET_INPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_SQUELCH_LEVEL:
-        afsk_test_tx_end(k->modem);
         k->params.squelch = value;
+        save_params(k);
         set_squelch_level(k->modem, value);
         break;
     case POLL_INPUT_VOLUME:
@@ -473,6 +501,17 @@ static void kiss_decode_hw_command(KissCtx * k)
         afsk_test_tx_end(k->modem);
         send_battery_level(k);
         break;
+    case SET_VERBOSITY:
+        kiss_set_verbosity(k, value);
+        save_params(k);
+        break;
+    case GET_VERBOSITY:
+        send_verbosity(k);
+        break;
+    case GET_CAPABILITIES:
+        afsk_test_tx_end(k->modem);
+        send_capabilities(k);
+        break;
     case GET_ALL_VALUES:
         afsk_test_tx_end(k->modem);
         send_all_values(k);
@@ -499,27 +538,31 @@ static void kiss_decode_command(KissCtx * k)
     {
     case TXDELAY:
         k->params.txdelay = b;
+        save_params(k);
         afsk_head(k->modem, b);
         break;
     case PERSIST:
         k->params.persist = b;
+        save_params(k);
         break;
     case SLOT:
         k->params.slot = b;
+        save_params(k);
         break;
     case TXTAIL:
         k->params.txtail = b;
+        save_params(k);
         afsk_tail(k->modem, b);
         break;
     case DUPLEX:
         k->params.duplex = b;
+        save_params(k);
         break;
     case HARDWARE:
         kiss_decode_hw_command(k);
         break;
     }
 
-    save_params(k);
     k->tx_pos = 0;
 }
 
@@ -667,6 +710,7 @@ void kiss_poll_modem(KissCtx * k)
             if (crc != 0xF0B8)  // AX.25 magic CRC
             {
                 LOG_INFO("Invalid CRC: %04hX\r\n", crc);
+                mobilinkd_set_error(MOBILINKD_ERROR_RX_CRC);
             }
             else
             {
@@ -683,18 +727,25 @@ void kiss_poll_modem(KissCtx * k)
         break;
     case HDLC_ERROR_CRC:
         LOG_INFO("CRC error\r\n");
+        mobilinkd_set_error(MOBILINKD_ERROR_RX_CRC);
         kfile_clearerr(k->modem);
         k->rx_pos = 0;
         break;
     case HDLC_ERROR_OVERRUN:
         if (k->rx_pos >= KISS_MIN_FRAME_LEN)
+        {
+            mobilinkd_set_error(MOBILINKD_ERROR_RX_BUFFER_OVERFLOW);
             LOG_INFO("Buffer overrun\r\n");
+        }
         kfile_clearerr(k->modem);
         k->rx_pos = 0;
         break;
     case HDLC_ERROR_ABORT:
         if (k->rx_pos >= KISS_MIN_FRAME_LEN)
+        {
+            mobilinkd_set_error(MOBILINKD_ERROR_RX_ABORT);
             LOG_INFO("Data abort\r\n");
+        }
         kfile_clearerr(k->modem);
         k->rx_pos = 0;
         break;
@@ -879,7 +930,8 @@ void kiss_poll_serial(KissCtx * k)
     {
         if (k->tx_pos != 0)
         {
-            kfile_printf(k->serial, "== RX Timeout (%d)\r\n", k->state);
+            mobilinkd_set_error(MOBILINKD_ERROR_SERIAL_RX_TIMEOUT);
+            LOG_ERR("== RX Timeout (%d)\r\n", k->state);
             k->tx_pos = 0;
         }
         kiss_change_state(k, WAIT_FOR_FEND);
