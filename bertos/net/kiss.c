@@ -90,7 +90,7 @@
 
 // HW commands (should be in kiss HW module?)
 #define SET_OUTPUT_VOLUME       1
-#define SET_INPUT_VOLUME        2
+#define SET_INPUT_ATTEN         2
 #define SET_SQUELCH_LEVEL       3
 #define POLL_INPUT_VOLUME       4
 #define STREAM_INPUT_VOLUME     5
@@ -101,7 +101,7 @@
 #define STOP_TX                10
 #define RESET                  11
 #define GET_OUTPUT_VOLUME      12
-#define GET_INPUT_VOLUME       13
+#define GET_INPUT_ATTEN        13
 #define GET_SQUELCH_LEVEL      14
 
 #define GET_TXDELAY            33
@@ -219,6 +219,15 @@ INLINE void kiss_change_state(KissCtx* k, uint8_t state)
     k->state = state;
 }
 
+static void send_input_atten(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_INPUT_ATTEN;
+    buf[1] = get_input_atten(k->modem);
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
 static void send_input_volume(KissCtx* k)
 {
     uint8_t buf[2];
@@ -323,6 +332,7 @@ static void send_all_values(KissCtx* k)
     send_duplex(k);
     send_output_volume(k);
     send_squelch_level(k);
+    send_input_atten(k);
 }
 
 static void kiss_decode_hw_command(KissCtx * k)
@@ -341,9 +351,9 @@ static void kiss_decode_hw_command(KissCtx * k)
         set_output_volume(k->modem, value);
         LOG_INFO("SET_OUTPUT_VOLUME (%d)\r\n", (int) value);
         break;
-    case SET_INPUT_VOLUME:
+    case SET_INPUT_ATTEN:
         k->params.input_volume = value;
-        set_input_volume(k->modem, value);
+        set_input_atten(k->modem, value);
         LOG_INFO("SET_INPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_SQUELCH_LEVEL:
@@ -377,9 +387,9 @@ static void kiss_decode_hw_command(KissCtx * k)
         afsk_test_tx_end(k->modem);
         send_output_volume(k);
         break;
-    case GET_INPUT_VOLUME:
+    case GET_INPUT_ATTEN:
         afsk_test_tx_end(k->modem);
-        send_input_volume(k);
+        send_input_atten(k);
         break;
     case GET_SQUELCH_LEVEL:
         afsk_test_tx_end(k->modem);
@@ -853,7 +863,7 @@ void kiss_init(KissCtx * k, KFile * channel, KFile * serial)
     afsk_head(k->modem, k->params.txdelay);
     afsk_tail(k->modem, k->params.txtail);
     set_output_volume(k->modem, k->params.output_volume);
-    set_input_volume(k->modem, k->params.input_volume);
+    set_input_atten(k->modem, k->params.input_volume);
     set_squelch_level(k->modem, k->params.squelch);
 }
 

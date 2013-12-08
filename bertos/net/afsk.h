@@ -222,10 +222,16 @@ INLINE void set_output_volume(KFile* fd, uint8_t volume)
     AFSK_SET_OUTPUT_VOLUME(afsk);
 }
 
-INLINE void set_input_volume(KFile* fd, uint8_t level)
+INLINE void set_input_atten(KFile* fd, uint8_t level)
 {
     Afsk* afsk = AFSK_CAST(fd);
     afsk->input_volume_gain = level;
+}
+
+INLINE uint8_t get_input_atten(KFile* fd)
+{
+    Afsk* afsk = AFSK_CAST(fd);
+    return afsk->input_volume_gain;
 }
 
 INLINE uint8_t get_input_volume(KFile* fd)
