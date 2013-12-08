@@ -47,6 +47,7 @@
 #include "buildrev.h"
 
 #include "hc-05.h"
+#include "battery.h"
 
 #define LOG_LEVEL   KISS_LOG_LEVEL
 #define LOG_FORMAT  KISS_LOG_FORMAT
@@ -322,6 +323,17 @@ static void send_hardware_version(KissCtx* k)
     kfile_flush(k->serial);
 }
 
+static void send_battery_level(KissCtx* k)
+{
+    uint16_t level = check_battery();
+    uint8_t buf[3];
+    buf[0] = GET_BATTERY_LEVEL;
+    buf[1] = (uint8_t)(level >> 8);
+    buf[2] = (uint8_t)(level & 0xFF);
+    kiss_tx_to_serial(k, HARDWARE, buf, 3);
+    kfile_flush(k->serial);
+}
+
 static void send_all_values(KissCtx* k)
 {
     send_hardware_version(k);
@@ -333,6 +345,7 @@ static void send_all_values(KissCtx* k)
     send_output_volume(k);
     send_squelch_level(k);
     send_input_atten(k);
+    send_battery_level(k);
 }
 
 static void kiss_decode_hw_command(KissCtx * k)
@@ -422,6 +435,10 @@ static void kiss_decode_hw_command(KissCtx * k)
     case GET_HARDWARE_VERSION:
         afsk_test_tx_end(k->modem);
         send_hardware_version(k);
+        break;
+    case GET_BATTERY_LEVEL:
+        afsk_test_tx_end(k->modem);
+        send_battery_level(k);
         break;
     case GET_ALL_VALUES:
         afsk_test_tx_end(k->modem);
