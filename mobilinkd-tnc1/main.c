@@ -66,6 +66,8 @@
 #include "hc-05.h"
 #include "battery.h"
 #include "mobilinkd_error.h"
+#include "mobilinkd_version.h"
+#include "mobilinkd_util.h"
 
 static Afsk afsk;
 static Serial ser;
@@ -84,6 +86,11 @@ void get_mcusr(void)
     MCUSR = 0;
     wdt_disable();
 }
+
+const char firmware_version[] PROGMEM = "\050" MOBILINKD_VERSION_STR;
+const char hardware_version[] PROGMEM = "\051" "1.12";
+const char PREFIX[] PROGMEM = "== ";
+const char ENDL[] PROGMEM = "\r\n";
 
 /**
  * Initialize the module.  Initialize the following subsystems:
@@ -114,18 +121,22 @@ static void init(void)
     uint16_t voltage = check_battery();
 
     // Announce
-    kfile_print(&ser.fd, "\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n");
-    kfile_printf(&ser.fd, "== Version 1.2, Build %d\r\n", VERS_BUILD);
-    kfile_printf(&ser.fd, "== Voltage = %umV\r\n", voltage);
+    kfile_print_P(&ser.fd, PSTR("\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n"));
+
+    kfile_print_P(&ser.fd, PSTR("== Version "));
+    kfile_print_P(&ser.fd, firmware_version + 1);
+    kfile_print_P(&ser.fd, ENDL);
+
+    kfile_printf(&ser.fd, "== Voltage: %umV\r\n", voltage);
     kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
-    kfile_print(&ser.fd, "== ");
-    kfile_print(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
-    kfile_print(&ser.fd, "\r\n");
+    kfile_print_P(&ser.fd, PREFIX);
+    kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
+    kfile_print_P(&ser.fd, ENDL);
     wdt_location = 0;
 
     if (hc_status != 0)
         kfile_printf(&ser.fd, "== HC-05 = %02x\r\n", hc_status);
-    kfile_print(&ser.fd, "== Starting.\r\n");
+    kfile_print_P(&ser.fd, PSTR("== Starting.\r\n"));
 
     mobilinkd_set_error(MOBILINKD_ERROR_WATCHDOG_TIMEOUT);
 
@@ -149,6 +160,14 @@ int main(void)
 
     while (1)
     {
+        if (mobilinkd_get_error() != MOBILINKD_ERROR_WATCHDOG_TIMEOUT)
+        {
+            kfile_print_P(&ser.fd, PREFIX);
+            kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
+            kfile_print_P(&ser.fd, ENDL);
+            afsk_rx_bottom_half(&afsk);
+            mobilinkd_set_error(MOBILINKD_ERROR_WATCHDOG_TIMEOUT);
+        }
         wdt_location = 3;
         afsk_rx_bottom_half(&afsk);
         wdt_location = 4;

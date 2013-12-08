@@ -3,6 +3,7 @@
 
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 
 #include "mobilinkd_error.h"
 
@@ -22,27 +23,34 @@ void  __attribute__ ((noreturn)) mobilinkd_abort(uint8_t error_code)
     reboot();
 }
 
-void mobilinkd_set_error(uint8_t error_code)
-{
-    mobilinkd_error_code = error_code;
-}
-
-uint8_t mobilinkd_get_error()
-{
-    return mobilinkd_error_code;
-}
+const char MOBILINKD_ERROR_NONE_STR[] PROGMEM = "No error";
+const char MOBILINKD_ERROR_AFSK_ADC_OVERFLOW_STR[] PROGMEM = "AFSK ADC buffer overflow";
+const char MOBILINKD_ERROR_WATCHDOG_TIMEOUT_STR[] PROGMEM = "WDT timed out";
+const char MOBILINKD_ERROR_RX_BUFFER_OVERFLOW_STR[] PROGMEM = "RX buffer overflow";
+const char MOBILINKD_ERROR_RX_CRC_STR[] PROGMEM = "Packet CRC error";
+const char MOBILINKD_ERROR_RX_ABORT_STR[] PROGMEM = "RX packet abort";
+const char MOBILINKD_ERROR_SERIAL_RX_TIMEOUT_STR[] PROGMEM = "Serial receive timeout";
+const char MOBILINKD_ERROR_UNKNOWN_STR[] PROGMEM = "Unknown error";
 
 const char* mobilinkd_strerror(uint8_t error_code)
 {
     switch (error_code)
     {
     case MOBILINKD_ERROR_NONE:
-        return "Normal startup";
+        return MOBILINKD_ERROR_NONE_STR;
     case MOBILINKD_ERROR_AFSK_ADC_OVERFLOW:
-        return "AFSK ADC buffer overflow";
+        return MOBILINKD_ERROR_AFSK_ADC_OVERFLOW_STR;
     case MOBILINKD_ERROR_WATCHDOG_TIMEOUT:
-        return "WDT timed out";
+        return MOBILINKD_ERROR_WATCHDOG_TIMEOUT_STR;
+    case MOBILINKD_ERROR_RX_BUFFER_OVERFLOW:
+        return MOBILINKD_ERROR_RX_BUFFER_OVERFLOW_STR;
+    case MOBILINKD_ERROR_RX_CRC:
+        return MOBILINKD_ERROR_RX_CRC_STR;
+    case MOBILINKD_ERROR_RX_ABORT:
+        return MOBILINKD_ERROR_RX_ABORT_STR;
+    case MOBILINKD_ERROR_SERIAL_RX_TIMEOUT:
+        return MOBILINKD_ERROR_SERIAL_RX_TIMEOUT_STR;
     default:
-        return "Unknown error";
+        return MOBILINKD_ERROR_UNKNOWN_STR;
     }
 }
