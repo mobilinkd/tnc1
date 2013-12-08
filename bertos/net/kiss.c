@@ -27,10 +27,12 @@
  * the GNU General Public License.
  *
  * Copyright 2012 Robin Gilks <g8ecj@gilks.org>
+ * Portions Copyright 2013 Mobilinkd LLC <rob@mobilinkd.com>
  *
  * -->
  *
  * \author Robin Gilks <g8ecj@gilks.org>
+ * \author Mobilinkd LLC <rob@mobilinkd.com>
  *
  * \brief KISS protocol handler
  *
@@ -44,7 +46,8 @@
 #include "kiss.h"
 #include "hw/hw_kiss.h"
 #include "cfg/cfg_kiss.h"
-#include "buildrev.h"
+#include "mobilinkd_version.h"
+#include "mobilinkd_error.h"
 
 #include "hc-05.h"
 #include "battery.h"
@@ -59,6 +62,8 @@
 #include <drv/ser.h>
 #include <drv/timer.h>
 #include <avr/wdt.h>
+#include <avr/pgmspace.h>
+#include <io/kfile.h>
 
 #include <algo/crc_ccitt.h>
 
@@ -179,7 +184,7 @@ static void load_params(KissCtx * k)
 }
 
 INLINE void kiss_tx_buffer_to_serial(
-    KissCtx* k, uint8_t* buf, uint16_t len)
+    KissCtx* k, const uint8_t* buf, uint16_t len)
 {
     Afsk* afsk = AFSK_CAST(k->modem);
 
@@ -204,12 +209,48 @@ INLINE void kiss_tx_buffer_to_serial(
 }
 
 static void kiss_tx_to_serial(
-    KissCtx * k, uint8_t type, uint8_t* buf, uint16_t len)
+    KissCtx * k, uint8_t type, const uint8_t* buf, uint16_t len)
 {
     kfile_putc(FEND, k->serial);
     kfile_putc(type, k->serial);
 
     kiss_tx_buffer_to_serial(k, buf, len);
+
+    kfile_putc(FEND, k->serial);
+}
+
+INLINE void kiss_tx_buffer_to_serial_P(
+    KissCtx* k, const uint8_t* buf, uint16_t len)
+{
+    Afsk* afsk = AFSK_CAST(k->modem);
+
+    for (uint16_t i = 0; i < len; i++)
+    {
+        afsk_rx_bottom_half(afsk);
+        uint8_t c = pgm_read_byte(buf + i);
+        switch (c)
+        {
+        case FEND:
+            kfile_putc(FESC, k->serial);
+            kfile_putc(TFEND, k->serial);
+            break;
+        case FESC:
+            kfile_putc(FESC, k->serial);
+            kfile_putc(TFESC, k->serial);
+            break;
+        default:
+            kfile_putc(c, k->serial);
+        }
+    }
+}
+
+static void kiss_tx_to_serial_P(
+    KissCtx * k, uint8_t type, const uint8_t* buf, uint16_t len)
+{
+    kfile_putc(FEND, k->serial);
+    kfile_putc(type, k->serial);
+
+    kiss_tx_buffer_to_serial_P(k, buf, len);
 
     kfile_putc(FEND, k->serial);
 }
@@ -301,25 +342,17 @@ static void send_duplex(KissCtx* k)
     kfile_flush(k->serial);
 }
 
-#define STRINGIFY(X) #X
-#define TO_STRING(x) " "STRINGIFY(x)
-
 static void send_firmware_version(KissCtx* k)
 {
-    const size_t len = sizeof(TO_STRING(VERS_BUILD));
-    uint8_t buf[sizeof(TO_STRING(VERS_BUILD))];
-    memcpy(buf, TO_STRING(VERS_BUILD), len);
-    buf[0] = GET_FIRMWARE_VERSION;
-    kiss_tx_to_serial(k, HARDWARE, buf, len);
+    kiss_tx_to_serial_P(k, HARDWARE, (const uint8_t*)firmware_version,
+        strlen_P(firmware_version));
     kfile_flush(k->serial);
 }
 
 static void send_hardware_version(KissCtx* k)
 {
-    uint8_t buf[2];
-    buf[0] = GET_HARDWARE_VERSION;
-    buf[1] = 1;
-    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kiss_tx_to_serial_P(k, HARDWARE, (const uint8_t*)hardware_version,
+        strlen_P(hardware_version));
     kfile_flush(k->serial);
 }
 
