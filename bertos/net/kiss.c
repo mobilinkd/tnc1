@@ -86,6 +86,7 @@
 #define HARDWARE 6
 
 // what states I can be in
+#define BT_NOT_CONNECTED   0
 #define WAIT_FOR_FEND      1
 #define WAIT_FOR_COMMAND   2
 #define WAIT_FOR_PARAMETER 3
@@ -380,12 +381,21 @@ static void send_verbosity(KissCtx* k)
     kfile_flush(k->serial);
 }
 
+static void send_bt_conn_track(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_BT_CONN_TRACK;
+    buf[1] = ((k->params.options & KISS_OPTION_CONN_TRACK) == 0) ? 0 : 1;
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
 static void send_capabilities(KissCtx* k)
 {
     uint8_t buf[3];
     buf[0] = GET_CAPABILITIES;
     buf[1] = CAP_DCD | CAP_BATTERY_LEVEL | CAP_FIRMWARE_VERSION | \
-        CAP_INPUT_ATTEN | CAP_SQUELCH;
+        CAP_INPUT_ATTEN | CAP_SQUELCH | CAP_BT_CONN_TRACK;
     buf[2] = (CAP_VERBOSE_ERROR) >> 8;
     kiss_tx_to_serial(k, HARDWARE, buf, 2);
     kfile_flush(k->serial);
@@ -405,6 +415,7 @@ static void send_all_values(KissCtx* k)
     send_battery_level(k);
     send_verbosity(k);
     send_capabilities(k);
+    send_bt_conn_track(k);
 }
 
 static void kiss_decode_hw_command(KissCtx * k)
@@ -507,6 +518,18 @@ static void kiss_decode_hw_command(KissCtx * k)
         break;
     case GET_VERBOSITY:
         send_verbosity(k);
+        break;
+    case SET_BT_CONN_TRACK:
+        afsk_test_tx_end(k->modem);
+        if (value)
+            k->params.options |= KISS_OPTION_CONN_TRACK;
+        else
+            k->params.options &= (~KISS_OPTION_CONN_TRACK);
+        save_params(k);
+        break;
+    case GET_BT_CONN_TRACK:
+        afsk_test_tx_end(k->modem);
+        send_bt_conn_track(k);
         break;
     case GET_CAPABILITIES:
         afsk_test_tx_end(k->modem);
@@ -670,6 +693,55 @@ INLINE void kiss_flush_modem(KissCtx* k)
     LOG_INFO("TX [%d] complete\r\n", k->tx_pos);
     k->tx_pos = 0;
 }
+
+#ifdef NOT_YET
+/**
+ * This function puts the TNC into a deep sleep until a Bluetooth
+ * connection is made.  The timer and ADC are disabled.  The BT module
+ * is put into command mode.  And then the TNC wakes up every 500ms to
+ * query the BT module for the connection status.
+ *
+ * Once the BT module state shows CONNECTED, the timer and AFSK driver
+ * are re-initialized.
+ *
+ * @param k
+ */
+static void wait_until_bt_connected(KissCtx* k)
+{
+
+}
+
+/**
+ * Check if the Bluetooth connection is active.
+ *
+ * This is checked when the Bluetooth connection is believed to be
+ * CONNECTED and 5 minutes has elapsed since any input has been received
+ * via the Bluetooth connection.
+ *
+ * If the connection is active, the last_tick timer is reset and the
+ * Bluetooth module is considered "connected" for the next 5 minutes.
+ *
+ * @param k
+ * @return
+ */
+static uint8_t bt_connected(KissCtx* k)
+{
+    if (k->params.options & KISS_OPTION_CONN_TRACK)
+    {
+        if (timer_clock() - k->last_tick > ms_to_ticks(300000)) // 5 minutes
+        {
+            if (hc05_connected(k->serial))
+            {
+                k->last_tick = timer_clock();
+                return 1;
+            }
+            return 0;
+        }
+        return hc05_connected(k->serial);
+    }
+    return 1;
+}
+#endif
 
 /**
  * Read incoming binary data from the modem
