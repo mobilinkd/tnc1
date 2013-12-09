@@ -383,7 +383,7 @@ static void send_verbosity(KissCtx* k)
 static void send_capabilities(KissCtx* k)
 {
     uint8_t buf[3];
-    buf[0] = GET_BT_CONN_TRACK;
+    buf[0] = GET_CAPABILITIES;
     buf[1] = CAP_DCD | CAP_BATTERY_LEVEL | CAP_FIRMWARE_VERSION | \
         CAP_INPUT_ATTEN | CAP_SQUELCH;
     buf[2] = (CAP_VERBOSE_ERROR) >> 8;
