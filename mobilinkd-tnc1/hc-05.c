@@ -20,15 +20,16 @@ static EEMEM uint16_t bt_initialized = 0;
 
 const uint8_t BT_RESET_PIN = 3;
 const uint8_t BT_COMMAND_PIN = 2;
+const uint8_t BT_CONNECT_PIN = 13;
 
 const char BT_NAME[] PROGMEM = "Mobilinkd TNC1";
 const char NEWLINE[] PROGMEM = "\r\n";
 
 const char OK_rsp[] PROGMEM = "OK";
-const char CONNECTED_rsp[] PROGMEM = "+STATE:CONNECTED";
 
 const char AT_cmd[] PROGMEM = "AT\r\n";
 const char RESET_cmd[] PROGMEM = "AT+RESET\r\n";
+const char POLAR_cmd[] PROGMEM = "AT+POLAR=1,0\r\n";
 const char STATE_qry[] PROGMEM = "AT+STATE?\r\n";
 const char NAME_qry[] PROGMEM = "AT+NAME?\r\n";
 const char NAME_cmd[] PROGMEM = "AT+NAME=";
@@ -139,10 +140,51 @@ INLINE void hc05_normal_mode(void)
     PORTD &= ~BV(BT_COMMAND_PIN);
 }
 
+bool hc05_connected()
+{
+    return (PINB & BV(PORTB5)) ? false : true;
+}
+
 INLINE bool hc05_soft_reset(KFile* ser)
 {
     // Do a soft reset here.
     kfile_print_P(ser, RESET_cmd);
+    kfile_flush(ser);
+    return starts_with_P(ser, OK_rsp, 1000L);
+}
+
+/**
+ * Adjust the polarity of the PI09 pin so that it goes LOW when a
+ * connection is established.  And set PORTB5 on the AVR to INPUT
+ * with the pull-up resistor engaged.
+ *
+ * In this configuration, we can track the connection status.  And
+ * we know that the TNC1 has been modified for connection tracking
+ * because that should be the only way that this pin goes low.
+ *
+ * If the connection between PI09 and PORTB5 has not been made, then
+ * PORTB5 should always be HIGH, even when we can safely assume that
+ * a Bluetooth connection does exist.
+ *
+ * When in the TNC configuration mode (e.g. GET_ALL_VALUES was sent)
+ * the Bluetooth connection must be established.  (There is a race
+ * condition here but it can be safely ignored.)  If GET_ALL_VALUES
+ * is sent and PORTB5 is low, we assume that the TNC can do
+ * connection tracking and CAP_BT_CONN_TRACK is returned as a
+ * capability and the GET_BT_CONN_TRACK state is returned via
+ * GET_ALL_VALUES.
+ *
+ * The configuration programs can safely assume that when a
+ * GET_BT_CONN_TRACK value is returned via GET_ALL_VALUES that
+ * connection tracking is possible.
+ */
+INLINE bool hc05_adjust_polarity(KFile* ser)
+{
+    // Set PB5 to input with pull-up engaged.
+    DDRB &= ~BV(PORTB5);
+    PORTB |= BV(PORTB5);
+
+    kfile_print_P(ser, POLAR_cmd);
     kfile_flush(ser);
     return starts_with_P(ser, OK_rsp, 1000L);
 }
@@ -179,6 +221,8 @@ uint8_t init_hc05(KFile* ser)
         return result;
     }
 #endif
+
+    if (!hc05_adjust_polarity(ser)) result |= 1;
 
     kfile_print_P(ser, NAME_qry);
     kfile_flush(ser);

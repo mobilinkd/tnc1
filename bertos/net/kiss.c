@@ -385,7 +385,7 @@ static void send_bt_conn_track(KissCtx* k)
 {
     uint8_t buf[2];
     buf[0] = GET_BT_CONN_TRACK;
-    buf[1] = ((k->params.options & KISS_OPTION_CONN_TRACK) == 0) ? 0 : 1;
+    buf[1] = kiss_get_conn_track(k);
     kiss_tx_to_serial(k, HARDWARE, buf, 2);
     kfile_flush(k->serial);
 }
@@ -395,7 +395,9 @@ static void send_capabilities(KissCtx* k)
     uint8_t buf[3];
     buf[0] = GET_CAPABILITIES;
     buf[1] = CAP_DCD | CAP_BATTERY_LEVEL | CAP_FIRMWARE_VERSION | \
-        CAP_INPUT_ATTEN | CAP_SQUELCH | CAP_BT_CONN_TRACK;
+        CAP_INPUT_ATTEN | CAP_SQUELCH;
+    // TNC is connected.  If detected, connection tracking is possible.
+    buf[1] |= hc05_connected() ? CAP_BT_CONN_TRACK : 0;
     buf[2] = (CAP_VERBOSE_ERROR) >> 8;
     kiss_tx_to_serial(k, HARDWARE, buf, 2);
     kfile_flush(k->serial);
@@ -415,7 +417,8 @@ static void send_all_values(KissCtx* k)
     send_battery_level(k);
     send_verbosity(k);
     send_capabilities(k);
-    send_bt_conn_track(k);
+    // TNC is connected.  If detected, connection tracking is possible.
+    if (hc05_connected()) send_bt_conn_track(k);
 }
 
 static void kiss_decode_hw_command(KissCtx * k)
@@ -520,16 +523,17 @@ static void kiss_decode_hw_command(KissCtx * k)
         send_verbosity(k);
         break;
     case SET_BT_CONN_TRACK:
-        afsk_test_tx_end(k->modem);
-        if (value)
-            k->params.options |= KISS_OPTION_CONN_TRACK;
-        else
-            k->params.options &= (~KISS_OPTION_CONN_TRACK);
-        save_params(k);
+        if (hc05_connected())
+        {
+            kiss_set_conn_track(k, value);
+            save_params(k);
+        }
         break;
     case GET_BT_CONN_TRACK:
-        afsk_test_tx_end(k->modem);
-        send_bt_conn_track(k);
+        if (hc05_connected())
+        {
+            send_bt_conn_track(k);
+        }
         break;
     case GET_CAPABILITIES:
         afsk_test_tx_end(k->modem);
@@ -694,54 +698,17 @@ INLINE void kiss_flush_modem(KissCtx* k)
     k->tx_pos = 0;
 }
 
-#ifdef NOT_YET
 /**
- * This function puts the TNC into a deep sleep until a Bluetooth
- * connection is made.  The timer and ADC are disabled.  The BT module
- * is put into command mode.  And then the TNC wakes up every 500ms to
- * query the BT module for the connection status.
+ * Should the packet be sent via Bluetooth connection.  Return true unless
+ * connection tracking is enabled and there is no Bluetooth connection
+ * established.
  *
- * Once the BT module state shows CONNECTED, the timer and AFSK driver
- * are re-initialized.
- *
- * @param k
+ * @param k is the KISS context.
  */
-static void wait_until_bt_connected(KissCtx* k)
+INLINE bool kiss_can_send(KissCtx* k)
 {
-
+    return (!kiss_get_conn_track(k) || hc05_connected());
 }
-
-/**
- * Check if the Bluetooth connection is active.
- *
- * This is checked when the Bluetooth connection is believed to be
- * CONNECTED and 5 minutes has elapsed since any input has been received
- * via the Bluetooth connection.
- *
- * If the connection is active, the last_tick timer is reset and the
- * Bluetooth module is considered "connected" for the next 5 minutes.
- *
- * @param k
- * @return
- */
-static uint8_t bt_connected(KissCtx* k)
-{
-    if (k->params.options & KISS_OPTION_CONN_TRACK)
-    {
-        if (timer_clock() - k->last_tick > ms_to_ticks(300000)) // 5 minutes
-        {
-            if (hc05_connected(k->serial))
-            {
-                k->last_tick = timer_clock();
-                return 1;
-            }
-            return 0;
-        }
-        return hc05_connected(k->serial);
-    }
-    return 1;
-}
-#endif
 
 /**
  * Read incoming binary data from the modem
@@ -787,7 +754,8 @@ void kiss_poll_modem(KissCtx * k)
             else
             {
                 k->rx_pos -= 2;            // drop the CRC octets
-                kiss_tx_to_serial(k, 0, k->rx_buf, k->rx_pos);
+                if (kiss_can_send(k))
+                    kiss_tx_to_serial(k, 0, k->rx_buf, k->rx_pos);
             }
         }
         else

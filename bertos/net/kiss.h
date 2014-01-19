@@ -50,6 +50,7 @@
 
 #include <io/kfile.h>
 
+// Firmware capabilities
 #define CAP_DCD                     0x0001
 #define CAP_SQUELCH                 0x0002
 #define CAP_INPUT_ATTEN             0x0004
@@ -69,17 +70,17 @@ typedef struct Params
 	uint8_t txtail;              ///< How long in 10mS units to wait after the data before keying off the transmitter
 	uint8_t duplex;              ///< Ignore current channel activity - just key up
 	uint8_t output_volume;       ///< output volume (0-255)
-	uint8_t input_volume;        ///< input attenuation (future)
+	uint8_t input_volume;        ///< input attenuation
 	uint8_t squelch;             ///< input squelch level (0-255)
 	uint8_t options;             ///< boolean options
 	uint8_t chksum;              ///< Validity check of params data
 } Params;
 
+// Boolean options.
 #define KISS_OPTION_CONN_TRACK  0x01
 #define KISS_OPTION_VERBOSE     0x02
 
 #define HW_CMD_BUFFER_SIZE 16
-
 
 typedef struct KissCtx
 {
@@ -98,8 +99,6 @@ typedef struct KissCtx
     Params params;                               ///< Operational KISS Parameters that control transmission
 } KissCtx;
 
-
-
 void kiss_init (KissCtx * k, KFile * channel, KFile * serial);
 void kiss_poll_serial (KissCtx * k);
 void kiss_poll_modem (KissCtx * k);
@@ -115,4 +114,17 @@ INLINE void kiss_set_verbosity(KissCtx * k, uint8_t value)
 INLINE uint8_t kiss_get_verbosity(const KissCtx* k)
 {
     return (k->params.options & KISS_OPTION_VERBOSE) ? 1 : 0;
+}
+
+INLINE void kiss_set_conn_track(KissCtx * k, uint8_t value)
+{
+    if (value)
+        k->params.options |= KISS_OPTION_CONN_TRACK;
+    else
+        k->params.options &= ~KISS_OPTION_CONN_TRACK;
+}
+
+INLINE uint8_t kiss_get_conn_track(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_CONN_TRACK) ? 1 : 0;
 }

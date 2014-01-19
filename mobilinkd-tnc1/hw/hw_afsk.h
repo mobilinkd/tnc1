@@ -73,17 +73,17 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  * Activate strobe pin. We use it for debugging purposes. If you don't use it, simply
  * leave empty the following macros
  */
-#define AFSK_STROBE_INIT() do { DDRB |= BV(5); } while (0)
+#define AFSK_STROBE_INIT() do {} while (0)
 
 /*
  * Set the pin high. This macro is called at the beginning of the interrupt routine
  */
-#define AFSK_STROBE_ON()   do { PORTB |= BV(5); } while (0)
+#define AFSK_STROBE_ON()   do {} while (0)
 
 /*
  * Set the pin low. This macro is called at the end of the interrupt routine
  */
-#define AFSK_STROBE_OFF()  do { PORTB &= ~BV(5); } while (0)
+#define AFSK_STROBE_OFF()  do {} while (0)
 
 #define DAC_TIMER_VALUE (DIV_ROUND((CPU_FREQ / 8), CONFIG_AFSK_DAC_SAMPLERATE) - 1)
 

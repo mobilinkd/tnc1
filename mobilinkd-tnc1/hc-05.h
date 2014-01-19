@@ -9,4 +9,6 @@
 
 uint8_t init_hc05(KFile* ser);
 
+bool hc05_connected(void);
+
 #endif // MOBILINKD_HC_05_H_
