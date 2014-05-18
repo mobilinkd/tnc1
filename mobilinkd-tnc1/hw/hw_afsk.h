@@ -85,7 +85,7 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  */
 #define AFSK_STROBE_OFF()  do {} while (0)
 
-#define DAC_TIMER_VALUE (DIV_ROUND((CPU_FREQ / 8), CONFIG_AFSK_DAC_SAMPLERATE) - 1)
+#define DAC_TIMER_VALUE (DIV_ROUND((CPU_FREQ / 8), CONFIG_AFSK_DAC_SAMPLERATE))
 
 /**
  * Initialize the specified channel of the DAC for AFSK needs.

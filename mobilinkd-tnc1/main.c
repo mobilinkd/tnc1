@@ -128,10 +128,12 @@ static void init(void)
     kfile_print_P(&ser.fd, ENDL);
 
     kfile_printf(&ser.fd, "== Voltage: %umV\r\n", voltage);
+#ifdef DEBUG
     kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
     kfile_print_P(&ser.fd, PREFIX);
     kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
     kfile_print_P(&ser.fd, ENDL);
+#endif
     wdt_location = 0;
 
     if (hc_status != 0)
