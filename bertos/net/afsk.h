@@ -96,6 +96,9 @@ typedef struct Afsk
 	/** DAC channel to be used by the modulator */
 	int dac_ch;
 
+    /** PTT pin used by the modem */
+    uint8_t ptt_pin;
+
 	/** Current sample of bit for output data. */
 	uint8_t sample_count;
 
@@ -258,6 +261,7 @@ void afsk_adc_isr (Afsk * af, int8_t sample);
 uint8_t afsk_dac_isr (Afsk * af);
 void afsk_set_timings (Afsk * af, uint8_t txhead, uint8_t txtail);
 void afsk_init (Afsk * af, int adc_ch, int dac_ch);
+void afsk_ptt_init(Afsk* af, uint8_t pin);
 
 void afsk_rx_bottom_half(Afsk* af);
 void afsk_tx_bottom_half(Afsk* af);

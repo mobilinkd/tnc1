@@ -8,8 +8,8 @@
 
 #include "buildrev.h"
 
-#define VERS_MAJOR 1
-#define VERS_MINOR 3
+#define VERS_MAJOR 2
+#define VERS_MINOR 0
 #define VERS_PATCH 0
 
 #define VERS_SEP .

@@ -44,8 +44,8 @@
  */
 
 #include "kiss.h"
-#include "hw/hw_kiss.h"
 #include "cfg/cfg_kiss.h"
+#include "mobilinkd_eeprom.h"
 #include "mobilinkd_version.h"
 #include "mobilinkd_error.h"
 
@@ -96,6 +96,7 @@
 #define STREAM_VOLUME      7
 
 // HW commands (should be in kiss HW module?)
+#define SAVE                    0   // Save settings to EEPROM.
 #define SET_OUTPUT_VOLUME       1
 #define SET_INPUT_ATTEN         2
 #define SET_SQUELCH_LEVEL       3
@@ -132,6 +133,16 @@
 #define SET_BT_MAJOR_CLASS     71   // Bluetooth Major Class
 #define GET_BT_MAJOR_CLASS     72   // Bluetooth Major Class
 
+#define SET_USB_POWER_ON       73   // Power on when USB power available
+#define GET_USB_POWER_ON       74
+#define SET_USB_POWER_OFF      75   // Power off when USB power unavailable
+#define GET_USB_POWER_OFF      76
+#define SET_BT_POWER_OFF       77   // Power off after n seconds w/o BT conn
+#define GET_BT_POWER_OFF       78
+
+#define SET_PTT_CHANNEL        79   // Which PTT line to use (currently 0 or 1,
+#define GET_PTT_CHANNEL        80   // multiplex or simplex)
+
 #define GET_CAPABILITIES      126   // Send all capabilities.
 #define GET_ALL_VALUES        127   // Send all settings & versions.
 
@@ -156,7 +167,7 @@ static void save_params(KissCtx * k)
 {
     k->params.chksum = checksum(k);
 
-    KISS_EEPROM_SAVE ();
+    MOBILINKD_EEPROM_SAVE((k->params));
 }
 
 
@@ -170,7 +181,7 @@ static void save_params(KissCtx * k)
 static void load_params(KissCtx * k)
 {
 
-    KISS_EEPROM_LOAD ();
+    MOBILINKD_EEPROM_LOAD((k->params));
 
     if (k->params.chksum != checksum(k))
     {
@@ -183,7 +194,7 @@ static void load_params(KissCtx * k)
         k->params.output_volume = 128;
         k->params.input_volume = 2;
         k->params.squelch = 2;
-        k->params.options = 0;
+        k->params.options = KISS_OPTION_VIN_POWER_ON | KISS_OPTION_VIN_POWER_OFF | KISS_OPTION_PTT_SIMPLEX;
         save_params(k);
     }
 }

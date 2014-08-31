@@ -13,7 +13,9 @@ mobilinkd-tnc1_USER_CSRC = \
 	$(mobilinkd-tnc1_SRC_PATH)/hc-05.c \
 	$(mobilinkd-tnc1_SRC_PATH)/afsk_dcd.c \
 	$(mobilinkd-tnc1_SRC_PATH)/battery.c \
+	$(mobilinkd-tnc1_SRC_PATH)/power.c \
 	$(mobilinkd-tnc1_SRC_PATH)/mobilinkd_error.c \
+	$(mobilinkd-tnc1_SRC_PATH)/mobilinkd_eeprom.c \
 	$(mobilinkd-tnc1_HW_PATH)/hw/hw_afsk.c \
 	#
 

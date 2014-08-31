@@ -43,7 +43,7 @@
  * $WIZ$ module_hw = "bertos/hw/hw_kiss.h"
  */
 
-
+#include "mobilinkd_eeprom.h"
 #include "cfg/cfg_kiss.h"
 
 #include <cfg/compiler.h>
@@ -61,24 +61,6 @@
 #define CAP_BT_PIN_CHANGE           0x0080
 #define CAP_VERBOSE_ERROR           0x0100
 
-
-typedef struct Params
-{
-	uint8_t txdelay;             ///< How long in 10mS units to wait for TX to settle before starting data
-	uint8_t persist;             ///< Likelyhood of taking the channel when its not busy
-	uint8_t slot;                ///< How long in 10mS units to wait between sampling the channel to see if free
-	uint8_t txtail;              ///< How long in 10mS units to wait after the data before keying off the transmitter
-	uint8_t duplex;              ///< Ignore current channel activity - just key up
-	uint8_t output_volume;       ///< output volume (0-255)
-	uint8_t input_volume;        ///< input attenuation
-	uint8_t squelch;             ///< input squelch level (0-255)
-	uint8_t options;             ///< boolean options
-	uint8_t chksum;              ///< Validity check of params data
-} Params;
-
-// Boolean options.
-#define KISS_OPTION_CONN_TRACK  0x01
-#define KISS_OPTION_VERBOSE     0x02
 
 #define HW_CMD_BUFFER_SIZE 16
 
