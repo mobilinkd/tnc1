@@ -63,8 +63,6 @@
 #include <avr/wdt.h>
 
 #include "buildrev.h"
-#include "hc-05.h"
-#include "battery.h"
 #include "mobilinkd_error.h"
 #include "mobilinkd_version.h"
 #include "mobilinkd_util.h"
@@ -88,7 +86,7 @@ void get_mcusr(void)
 }
 
 const char firmware_version[] PROGMEM = "\050" MOBILINKD_VERSION_STR;
-const char hardware_version[] PROGMEM = "\051" "1.12";
+const char hardware_version[] PROGMEM = "\051" "Arduino";
 const char PREFIX[] PROGMEM = "== ";
 const char ENDL[] PROGMEM = "\r\n";
 
@@ -116,10 +114,6 @@ static void init(void)
     ser_init(&ser, SER_UART0);
     ser_setbaudrate(&ser, 38400L);
 
-    int hc_status = init_hc05(&ser.fd);
-
-    uint16_t voltage = check_battery();
-
     // Announce
     kfile_print_P(&ser.fd, PSTR("\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n"));
 
@@ -127,7 +121,6 @@ static void init(void)
     kfile_print_P(&ser.fd, firmware_version + 1);
     kfile_print_P(&ser.fd, ENDL);
 
-    kfile_printf(&ser.fd, "== Voltage: %umV\r\n", voltage);
 #ifdef DEBUG
     kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
     kfile_print_P(&ser.fd, PREFIX);
@@ -136,8 +129,6 @@ static void init(void)
 #endif
     wdt_location = 0;
 
-    if (hc_status != 0)
-        kfile_printf(&ser.fd, "== HC-05 = %02x\r\n", hc_status);
     kfile_print_P(&ser.fd, PSTR("== Starting.\r\n"));
 
     mobilinkd_set_error(MOBILINKD_ERROR_WATCHDOG_TIMEOUT);

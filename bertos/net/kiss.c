@@ -49,9 +49,6 @@
 #include "mobilinkd_version.h"
 #include "mobilinkd_error.h"
 
-#include "hc-05.h"
-#include "battery.h"
-
 #define LOG_LEVEL   KISS_LOG_LEVEL
 #define LOG_FORMAT  KISS_LOG_FORMAT
 #include <cfg/debug.h>
@@ -361,17 +358,6 @@ static void send_hardware_version(KissCtx* k)
     kfile_flush(k->serial);
 }
 
-static void send_battery_level(KissCtx* k)
-{
-    uint16_t level = check_battery();
-    uint8_t buf[3];
-    buf[0] = GET_BATTERY_LEVEL;
-    buf[1] = (uint8_t)(level >> 8);
-    buf[2] = (uint8_t)(level & 0xFF);
-    kiss_tx_to_serial(k, HARDWARE, buf, 3);
-    kfile_flush(k->serial);
-}
-
 static void send_verbosity(KissCtx* k)
 {
     uint8_t buf[2];
@@ -381,23 +367,13 @@ static void send_verbosity(KissCtx* k)
     kfile_flush(k->serial);
 }
 
-static void send_bt_conn_track(KissCtx* k)
-{
-    uint8_t buf[2];
-    buf[0] = GET_BT_CONN_TRACK;
-    buf[1] = kiss_get_conn_track(k);
-    kiss_tx_to_serial(k, HARDWARE, buf, 2);
-    kfile_flush(k->serial);
-}
-
 static void send_capabilities(KissCtx* k)
 {
     uint8_t buf[3];
     buf[0] = GET_CAPABILITIES;
-    buf[1] = CAP_DCD | CAP_BATTERY_LEVEL | CAP_FIRMWARE_VERSION | \
+    buf[1] = CAP_DCD | CAP_FIRMWARE_VERSION | \
         CAP_INPUT_ATTEN | CAP_SQUELCH;
     // TNC is connected.  If detected, connection tracking is possible.
-    buf[1] |= hc05_connected() ? CAP_BT_CONN_TRACK : 0;
     buf[2] = (CAP_VERBOSE_ERROR) >> 8;
     kiss_tx_to_serial(k, HARDWARE, buf, 2);
     kfile_flush(k->serial);
@@ -414,11 +390,8 @@ static void send_all_values(KissCtx* k)
     send_output_volume(k);
     send_squelch_level(k);
     send_input_atten(k);
-    send_battery_level(k);
     send_verbosity(k);
     send_capabilities(k);
-    // TNC is connected.  If detected, connection tracking is possible.
-    if (hc05_connected()) send_bt_conn_track(k);
 }
 
 static void kiss_decode_hw_command(KissCtx * k)
@@ -511,29 +484,12 @@ static void kiss_decode_hw_command(KissCtx * k)
         afsk_test_tx_end(k->modem);
         send_hardware_version(k);
         break;
-    case GET_BATTERY_LEVEL:
-        afsk_test_tx_end(k->modem);
-        send_battery_level(k);
-        break;
     case SET_VERBOSITY:
         kiss_set_verbosity(k, value);
         save_params(k);
         break;
     case GET_VERBOSITY:
         send_verbosity(k);
-        break;
-    case SET_BT_CONN_TRACK:
-        if (hc05_connected())
-        {
-            kiss_set_conn_track(k, value);
-            save_params(k);
-        }
-        break;
-    case GET_BT_CONN_TRACK:
-        if (hc05_connected())
-        {
-            send_bt_conn_track(k);
-        }
         break;
     case GET_CAPABILITIES:
         afsk_test_tx_end(k->modem);
@@ -699,18 +655,6 @@ INLINE void kiss_flush_modem(KissCtx* k)
 }
 
 /**
- * Should the packet be sent via Bluetooth connection.  Return true unless
- * connection tracking is enabled and there is no Bluetooth connection
- * established.
- *
- * @param k is the KISS context.
- */
-INLINE bool kiss_can_send(KissCtx* k)
-{
-    return (!kiss_get_conn_track(k) || hc05_connected());
-}
-
-/**
  * Read incoming binary data from the modem
  * Encode into SLIP encoded data prefixed by a KISS data command and add to KISS object's buffer
  * Pass up to the serial port if HDLC CRC is OK
@@ -754,8 +698,7 @@ void kiss_poll_modem(KissCtx * k)
             else
             {
                 k->rx_pos -= 2;            // drop the CRC octets
-                if (kiss_can_send(k))
-                    kiss_tx_to_serial(k, 0, k->rx_buf, k->rx_pos);
+                kiss_tx_to_serial(k, 0, k->rx_buf, k->rx_pos);
             }
         }
         else
