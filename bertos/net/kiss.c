@@ -846,6 +846,22 @@ void kiss_poll_serial(KissCtx * k)
     }
 
     wdt_location = 131;
+
+    // Check for serial errors.  Happens during packet ops because of
+    // the small buffer sizes.
+    if ((c = kfile_error(k->serial)) != 0)
+    {
+        if (c & (SERRF_RXFIFOOVERRUN | SERRF_RXSROVERRUN))
+            mobilinkd_set_error(MOBILINKD_ERROR_SERIAL_RX_OVERRUN);
+        else
+            mobilinkd_set_error(MOBILINKD_ERROR_SERIAL_RX_ERROR);
+
+        kfile_clearerr(k->serial);
+        k->tx_pos = 0;
+        kiss_change_state(k, WAIT_FOR_FEND);
+        return;
+    }
+
     while ((c = kfile_getc(k->serial)) != EOF)
     {
         wdt_reset();
