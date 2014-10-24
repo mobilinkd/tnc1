@@ -18,6 +18,8 @@ const char* mobilinkd_strerror(uint8_t error_code);
 #define MOBILINKD_ERROR_RX_CRC 4
 #define MOBILINKD_ERROR_RX_ABORT 5
 #define MOBILINKD_ERROR_SERIAL_RX_TIMEOUT 6
+#define MOBILINKD_ERROR_SERIAL_RX_OVERRUN 7
+#define MOBILINKD_ERROR_SERIAL_RX_ERROR 8
 
 INLINE void mobilinkd_set_error(uint8_t error_code)
 {

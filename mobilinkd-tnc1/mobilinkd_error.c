@@ -30,6 +30,8 @@ const char MOBILINKD_ERROR_RX_BUFFER_OVERFLOW_STR[] PROGMEM = "RX buffer overflo
 const char MOBILINKD_ERROR_RX_CRC_STR[] PROGMEM = "Packet CRC error";
 const char MOBILINKD_ERROR_RX_ABORT_STR[] PROGMEM = "RX packet abort";
 const char MOBILINKD_ERROR_SERIAL_RX_TIMEOUT_STR[] PROGMEM = "Serial receive timeout";
+const char MOBILINKD_ERROR_SERIAL_RX_OVERRUN_STR[] PROGMEM = "Serial buffer overrun";
+const char MOBILINKD_ERROR_SERIAL_RX_ERROR_STR[] PROGMEM = "Unknown error";
 const char MOBILINKD_ERROR_UNKNOWN_STR[] PROGMEM = "Unknown error";
 
 const char* mobilinkd_strerror(uint8_t error_code)
@@ -50,6 +52,10 @@ const char* mobilinkd_strerror(uint8_t error_code)
         return MOBILINKD_ERROR_RX_ABORT_STR;
     case MOBILINKD_ERROR_SERIAL_RX_TIMEOUT:
         return MOBILINKD_ERROR_SERIAL_RX_TIMEOUT_STR;
+    case MOBILINKD_ERROR_SERIAL_RX_OVERRUN:
+        return MOBILINKD_ERROR_SERIAL_RX_OVERRUN_STR;
+    case MOBILINKD_ERROR_SERIAL_RX_ERROR:
+        return MOBILINKD_ERROR_SERIAL_RX_ERROR_STR;
     default:
         return MOBILINKD_ERROR_UNKNOWN_STR;
     }
