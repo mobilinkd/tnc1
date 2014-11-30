@@ -49,6 +49,7 @@
 #include <cfg/compiler.h>
 
 #include <io/kfile.h>
+#include <net/afsk.h>
 
 // Firmware capabilities
 #define CAP_DCD                     0x0001
@@ -60,6 +61,7 @@
 #define CAP_BT_NAME_CHANGE          0x0040
 #define CAP_BT_PIN_CHANGE           0x0080
 #define CAP_VERBOSE_ERROR           0x0100
+#define CAP_EEPROM_SAVE             0x0200
 
 
 #define HW_CMD_BUFFER_SIZE 16
@@ -109,4 +111,44 @@ INLINE void kiss_set_conn_track(KissCtx * k, uint8_t value)
 INLINE uint8_t kiss_get_conn_track(const KissCtx* k)
 {
     return (k->params.options & KISS_OPTION_CONN_TRACK) ? 1 : 0;
+}
+
+INLINE void kiss_set_ptt_mode(KissCtx* k, uint8_t mode)
+{
+    if (mode == AFSK_PTT_MODE_SIMPLEX)
+        k->params.options |= KISS_OPTION_PTT_SIMPLEX;
+    else
+        k->params.options &= ~KISS_OPTION_PTT_SIMPLEX;
+}
+
+INLINE uint8_t kiss_get_ptt_mode(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_PTT_SIMPLEX) ?
+        AFSK_PTT_MODE_SIMPLEX : AFSK_PTT_MODE_MULTIPLEX;
+}
+
+INLINE void kiss_set_usb_power_on(KissCtx* k, uint8_t value)
+{
+    if (value)
+        k->params.options |= KISS_OPTION_VIN_POWER_ON;
+    else
+        k->params.options &= ~KISS_OPTION_VIN_POWER_ON;
+}
+
+INLINE uint8_t kiss_get_usb_power_on(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_VIN_POWER_ON) ? 1 : 0;
+}
+
+INLINE void kiss_set_usb_power_off(KissCtx* k, uint8_t value)
+{
+    if (value)
+        k->params.options |= KISS_OPTION_VIN_POWER_OFF;
+    else
+        k->params.options &= ~KISS_OPTION_VIN_POWER_OFF;
+}
+
+INLINE uint8_t kiss_get_usb_power_off(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_VIN_POWER_OFF) ? 1 : 0;
 }

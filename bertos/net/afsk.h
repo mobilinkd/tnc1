@@ -72,6 +72,10 @@
 
 #define SAMPLEPERBIT (SAMPLERATE / BITRATE)
 
+/// Kenwood and MiniDIN-6 data connector types with separate PTT signal.
+#define AFSK_PTT_MODE_SIMPLEX 0
+/// Icom, Yaesu, Alinco and others with PTT multiplexed on MIC signal.
+#define AFSK_PTT_MODE_MULTIPLEX 1
 
 #define DC_FILTER_SHIFT 5
 #define DC_FILTER_SIZE 32
@@ -210,6 +214,12 @@ INLINE void carrier_off(Afsk* af)
 
 INLINE uint8_t carrier_present(const Afsk* af) { return af->carrier; }
 
+INLINE uint8_t get_carrier(KFile* fd)
+{
+    const Afsk* afsk = AFSK_CAST(fd);
+    return afsk->carrier;
+}
+
 /**
  * Set the output volume.  The output volume is a range from 0-255, with
  * 255 being the highest.
@@ -262,6 +272,8 @@ uint8_t afsk_dac_isr (Afsk * af);
 void afsk_set_timings (Afsk * af, uint8_t txhead, uint8_t txtail);
 void afsk_init (Afsk * af, int adc_ch, int dac_ch);
 void afsk_ptt_init(Afsk* af, uint8_t pin);
+
+void afsk_ptt_set(Afsk* af, uint8_t pin);
 
 void afsk_rx_bottom_half(Afsk* af);
 void afsk_tx_bottom_half(Afsk* af);

@@ -5,7 +5,10 @@
 #ifndef MOBILINKD_EEPROM_H_
 #define MOBILINKD_EEPROM_H_
 
+#include <cfg/compiler.h>
 #include <avr/eeprom.h>
+
+#include <stdlib.h>
 
 typedef struct Params
 {
@@ -27,6 +30,7 @@ typedef struct Params
 #define KISS_OPTION_VIN_POWER_ON    0x04
 #define KISS_OPTION_VIN_POWER_OFF   0x08
 #define KISS_OPTION_PTT_SIMPLEX     0x10
+#define KISS_OPTION_BT_POWER_OFF    0x20
 
 extern Params EEMEM eeparams;
 
@@ -34,5 +38,22 @@ extern Params EEMEM eeparams;
 
 #define MOBILINKD_EEPROM_LOAD(p) do { eeprom_read_block ((void *) &p, (const void *) &eeparams, sizeof (eeparams)); } while (0)
 
+void eeprom_overwrite_byte(unsigned int addr, char value);
+
+uint32_t get_bootloader_value(void);
+
+/**
+ * Check whether to enter the bootloader based on a 32-bit EEPROM value.
+ * Enter the bootloader if the number of set bits is odd.  Fully erased
+ * there are 32-set bits.  The program resets the highest rank set bit
+ * first, and the bootloader resets the next highest order bit.  Each
+ * bootloader entry requires two bits be reset.
+ *
+ * It is the program's, not the bootloader's responsibility to erase the
+ * values when 0 is reached.
+ *
+ * @return 1 if an odd number of bits is set, otherwise 0.
+ */
+void set_enter_bootloader(void);
 
 #endif // MOBILINKD_EEPROM_H_

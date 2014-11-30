@@ -10,7 +10,7 @@
 
 #define VERS_MAJOR 2
 #define VERS_MINOR 0
-#define VERS_PATCH 0
+#define VERS_PATCH 1
 
 #define VERS_SEP .
 

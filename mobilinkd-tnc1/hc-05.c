@@ -15,11 +15,11 @@
 #include "mobilinkd_util.h"
 #include "config.h"
 
-static EEMEM uint16_t bt_initialized = 0;
+static EEMEM uint16_t bt_initialized;
 
-#define BT_INIT_MAGIC 0xc0a1
+#define BT_INIT_MAGIC 0xc0a2
 
-const char BT_NAME[] PROGMEM = "Mobilinkd TNC1";
+const char BT_NAME[] PROGMEM = "Mobilinkd TNC2";
 const char NEWLINE[] PROGMEM = "\r\n";
 
 const char OK_rsp[] PROGMEM = "OK";
@@ -151,18 +151,18 @@ INLINE void hc05_reset(void)
 INLINE void hc05_command_mode(void)
 {
     // Bring PD2 HIGH to enter command mode.
-    HC_05_COMMAND_DDR |= BV(HC_05_COMMAND_PIN);
+    HC_05_COMMAND_PORT |= BV(HC_05_COMMAND_PIN);
 }
 
 INLINE void hc05_normal_mode(void)
 {
     // Bring PD2 LOW to exit command mode.
-    HC_05_COMMAND_DDR &= ~BV(HC_05_COMMAND_PIN);
+    HC_05_COMMAND_PORT &= ~BV(HC_05_COMMAND_PIN);
 }
 
 bool hc05_connected()
 {
-    return (PINB & BV(PORTB5)) ? false : true;
+    return (HC_05_STATUS_PORT & BV(HC_05_STATUS_PIN)) ? false : true;
 }
 
 INLINE bool hc05_soft_reset(KFile* ser)

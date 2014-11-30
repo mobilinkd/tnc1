@@ -7,6 +7,7 @@
 #include "mobilinkd_error.h"
 #include "mobilinkd_version.h"
 #include "mobilinkd_util.h"
+#include "mobilinkd_eeprom.h"
 #include "battery.h"
 
 #include <drv/ser.h>
@@ -207,7 +208,7 @@ volatile uint8_t wdt_location __attribute__ ((section (".noinit")));
 void power_on_message(int hc_status)
 {
     // Announce
-    kfile_print_P(&ser.fd, PSTR("\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n"));
+    kfile_print_P(&ser.fd, PSTR("\r\n== BeRTOS AVR/Mobilinkd TNC2\r\n"));
 
     kfile_print_P(&ser.fd, PSTR("== Version "));
     kfile_print_P(&ser.fd, firmware_version + 1);
@@ -223,6 +224,7 @@ void power_on_message(int hc_status)
     }
 
 #ifdef DEBUG
+    kfile_printf(&ser.fd, "== Bootloader flags: %08lx\r\n", get_bootloader_value());
     kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
     kfile_print_P(&ser.fd, PREFIX);
     kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));

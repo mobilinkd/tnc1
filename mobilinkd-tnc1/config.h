@@ -19,9 +19,9 @@
 #define HC_05_RESET_PORT PORTC
 #define HC_05_RESET_PIN PIN5
 
-#define HC_05_STATUS_DDR DDRB
-#define HC_05_STATUS_PORT PORTB
-#define HC_05_STATUS_PIN PIN5
+#define HC_05_STATUS_DDR DDRD
+#define HC_05_STATUS_PORT PORTD
+#define HC_05_STATUS_PIN PIN7
 
 #define HC_05_POWER_DDR DDRD
 #define HC_05_POWER_PORT PORTD
@@ -42,10 +42,10 @@
 #define PTT_PORT PORTB
 
 // Multiplexed PTT (2K2 resistor on Mic+)
-#define PTT_PIN_M PIN2
+#define PTT_PIN_M PIN1
 
 // Simplex PTT (Kenwood, MiniDIN-6 data port)
-#define PTT_PIN_S PIN3
+#define PTT_PIN_S PIN2
 
 #define AUDIO_OUT_DDR DDRD
 #define AUDIO_OUT_PORT PORTD

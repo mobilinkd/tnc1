@@ -125,10 +125,6 @@ static void init(void)
     kdbg_init();
     timer_init();
 
-    /* Initialize serial port */
-    ser_init(&ser, SER_UART0);
-    ser_setbaudrate(&ser, 38400L);
-
     power_on();
 
     int hc_status = init_hc05(&ser.fd);
@@ -155,11 +151,11 @@ static void init(void)
 
     if (kiss.params.options & KISS_OPTION_PTT_SIMPLEX)
     {
-        afsk_ptt_init(&afsk, PTT_PIN_S);
+        afsk_ptt_set(&afsk, AFSK_PTT_MODE_SIMPLEX);
     }
     else
     {
-        afsk_ptt_init(&afsk, PTT_PIN_M);
+        afsk_ptt_set(&afsk, AFSK_PTT_MODE_MULTIPLEX);
     }
 
     power_on_message(hc_status);
