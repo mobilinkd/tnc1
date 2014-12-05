@@ -734,8 +734,8 @@ static bool can_transmit(KissCtx* k)
     Afsk* afsk = AFSK_CAST(k->modem);
 
     // see if the channel is busy
-    if ((k->params.duplex && carrier_present(afsk)) ||
-        (!k->params.duplex && (get_input_volume(k->modem) > 4)))
+    if ((k->params.squelch == 0 && carrier_present(afsk)) ||
+        (k->params.squelch > 0 && (get_input_volume(k->modem) > 4)))
     {
         wdt_location = 136;
         uint16_t i = rand();
