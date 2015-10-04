@@ -196,7 +196,7 @@ static void load_params(KissCtx * k)
         k->params.duplex = 0;
         k->params.output_volume = 128;
         k->params.input_volume = 2;
-        k->params.squelch = 2;
+        k->params.squelch = 0;
         k->params.options = KISS_OPTION_PTT_SIMPLEX;
         save_params(k);
     }
