@@ -275,8 +275,7 @@ uint8_t init_hc05(KFile* ser)
     timer_delay(1000L);
     hc05_normal_mode();
 
-    if (!hc05_soft_reset(ser))
-        result |= 64;
+    hc05_reset();   // Hard reset needed to activate POLAR cmd.
 
     eeprom_write_word((uint16_t*) &bt_initialized, BT_INIT_MAGIC);
 
