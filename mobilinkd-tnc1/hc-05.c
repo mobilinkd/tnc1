@@ -162,7 +162,7 @@ INLINE void hc05_normal_mode(void)
 
 bool hc05_connected()
 {
-    return (HC_05_STATUS_PORT & BV(HC_05_STATUS_PIN)) ? false : true;
+    return ((HC_05_STATUS_INPORT & BV(HC_05_STATUS_PIN)) ? false : true);
 }
 
 INLINE bool hc05_soft_reset(KFile* ser)
@@ -200,10 +200,6 @@ INLINE bool hc05_soft_reset(KFile* ser)
  */
 INLINE bool hc05_adjust_polarity(KFile* ser)
 {
-    // Set PB5 to input with pull-up engaged.
-    HC_05_STATUS_DDR &= ~BV(HC_05_STATUS_PIN);
-    HC_05_STATUS_PORT |= BV(HC_05_STATUS_PIN);
-
     kfile_print_P(ser, POLAR_cmd);
     kfile_flush(ser);
     return starts_with_P(ser, OK_rsp, 1000L);
@@ -211,7 +207,12 @@ INLINE bool hc05_adjust_polarity(KFile* ser)
 
 uint8_t init_hc05(KFile* ser)
 {
+    // Set HC_05_COMMAND_PIN to output.
     HC_05_COMMAND_DDR |= BV(HC_05_COMMAND_PIN);
+
+    // Set HC_05_STATUS_PIN to input with pull-up engaged.
+    HC_05_STATUS_DDR &= ~BV(HC_05_STATUS_PIN);
+    HC_05_STATUS_PORT |= BV(HC_05_STATUS_PIN);
 
     uint8_t result = 0;
 
@@ -275,7 +276,8 @@ uint8_t init_hc05(KFile* ser)
     timer_delay(1000L);
     hc05_normal_mode();
 
-    hc05_reset();   // Hard reset needed to activate POLAR cmd.
+    if (!hc05_soft_reset(ser))
+        result |= 64;
 
     eeprom_write_word((uint16_t*) &bt_initialized, BT_INIT_MAGIC);
 

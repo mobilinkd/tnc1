@@ -21,6 +21,7 @@
 
 #define HC_05_STATUS_DDR DDRD
 #define HC_05_STATUS_PORT PORTD
+#define HC_05_STATUS_INPORT PIND
 #define HC_05_STATUS_PIN PIN7
 
 #define HC_05_POWER_DDR DDRD
@@ -30,11 +31,13 @@
 // INT1 pin
 #define BUTTON_DDR DDRD
 #define BUTTON_PORT PORTD
+#define BUTTON_INPORT PIND
 #define BUTTON_PIN PIN3
 
 // INT0 pin
 #define VIN_DETECT_DDR DDRD
 #define VIN_DETECT_PORT PORTD
+#define VIN_DETECT_INPORT PIND
 #define VIN_DETECT_PIN PIN2
 
 // Both PTT pins must be on the same port.
