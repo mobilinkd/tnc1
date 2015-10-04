@@ -98,9 +98,6 @@ void enable_power_off(void)
 {
     BUTTON_DDR &= ~BV(BUTTON_PIN);      // Input.
 
-    // Wait until the button is released.
-    // do {timer_delay(50L);} while ((BUTTON_PORT & BV(BUTTON_PIN)) == 0);
-
     cli();  // We are powering on.  Do not disturb our preparation.
 
     power_status = POWER_ON;
@@ -121,9 +118,6 @@ void enable_power_off(void)
 
 void power_off(void)
 {
-    // Wait until the button is released.
-    // do {timer_delay(50L);} while ((BUTTON_PORT & BV(BUTTON_PIN)) == 0);
-
     power_status = POWER_OFF;
     power_request = POWER_ON;
 
@@ -136,13 +130,6 @@ void power_off(void)
     // Remove the offset voltage for ADC
     AUDIO_OFFSET_PORT &= ~BV(AUDIO_OFFSET_PIN);
     AUDIO_OFFSET_DDR &= ~BV(AUDIO_OFFSET_PIN);
-
-    // Set all pins as input and engage pullups, except serial and external
-    // interrupt pins.
-    // DDRD &= 00001111b;
-    // DDRB = 00000000b;
-    // PORTD |= 11110000b;
-    // PORTB |= 11111111b;
 
     // disable ADC
     uint8_t ADCSRA_save = ADCSRA;
