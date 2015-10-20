@@ -903,6 +903,12 @@ void kiss_poll_serial(KissCtx * k)
      * This can lead to multi-second delays in sending.  While this is
      * happening, we may be dropping data from the serial port.
      *
+     * Waiting indefinitely, with no timeout whatsoever, resulted in a
+     * hung TNC when the squelch is open and DCD is not selected.  So we
+     * force a 30 second timeout at which point we drop the packet.  That
+     * value is rather arbitrary.  We could make this configurable if it
+     * ever becomes an issue.
+     *
      * We attempted to check if it is OK to transmit as soon as the first
      * KISS data symbol arrives, using the serial buffer as the TX buffer.
      * It seems older, slower Android devices will not TX all of the data
@@ -922,7 +928,14 @@ void kiss_poll_serial(KissCtx * k)
         }
         else
         {
-            return;
+            // If we cannot TX for 30 seconds, drop the packet.
+            if (timer_clock() - k->last_tick > ms_to_ticks(30000L)) {
+                kiss_flush_modem(k);
+                k->tx_pos = 0;
+                kiss_change_state(k, WAIT_FOR_DATA);
+            } else {
+                return;
+            }
         }
     }
 
