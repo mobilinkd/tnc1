@@ -355,7 +355,7 @@ $(foreach t,$(TRG),$(eval $(call build_target,$(t))))
 cleanall: clean
 clean: clean-recursive
 	-$(RM_R) $(OBJDIR)
-	-$(RM_R) $(OUTDIR)
+	# -$(RM_R) $(OUTDIR)
 
 $(RECURSIVE_TARGETS):
 	@target=`echo $@ | sed s/-recursive//`; \

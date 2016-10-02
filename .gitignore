@@ -19,9 +19,12 @@
 *~
 
 # BertOS directories
-images
 images.sav
 obj
 Release
 Debug
 328P_16Mhz
+*.bin
+*.map
+*.s19
+

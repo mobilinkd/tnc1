@@ -16,11 +16,14 @@ uint16_t check_battery()
 {
     uint32_t adc = 0;
 
+    // Enable battery divider
+    BATTERY_DIVIDER_DDR |= BV(BATTERY_DIVIDER_PIN);   // output mode
+    BATTERY_DIVIDER_PORT &= ~BV(BATTERY_DIVIDER_PIN); // low
+
     // Disable interrupts.
     cli();
 
     // Disable digital input
-
     BATTERY_LEVEL_DDR &= ~BV(BATTERY_LEVEL_PIN);
     BATTERY_LEVEL_PORT &= ~BV(BATTERY_LEVEL_PIN);
     DIDR0 |= BV(BATTERY_LEVEL_PIN);
@@ -58,6 +61,9 @@ uint16_t check_battery()
     ADCSRB = adcsrb;
     // Enable interrupts.
     sei();
+
+    // Disable battery divider
+    BATTERY_DIVIDER_DDR &= ~BV(BATTERY_DIVIDER_PIN);  // input mode; high impedance
 
     adc *= 100;
     uint16_t result = adc / 976;
