@@ -16,9 +16,9 @@ uint16_t check_battery()
 {
     uint32_t adc = 0;
 
-    // Enable battery divider
-    BATTERY_DIVIDER_DDR |= BV(BATTERY_DIVIDER_PIN);   // output mode
-    BATTERY_DIVIDER_PORT &= ~BV(BATTERY_DIVIDER_PIN); // low
+    // Enable battery divider; allows current at V/2 to flow to ADC.
+    BATTERY_ENABLE_DDR |= BV(BATTERY_ENABLE_PIN);   // output mode
+    BATTERY_ENABLE_PORT |= BV(BATTERY_ENABLE_PIN);  // high (TNC 2.2)
 
     // Disable interrupts.
     cli();
@@ -62,8 +62,9 @@ uint16_t check_battery()
     // Enable interrupts.
     sei();
 
-    // Disable battery divider
-    BATTERY_DIVIDER_DDR &= ~BV(BATTERY_DIVIDER_PIN);  // input mode; high impedance
+    // Disable battery input; pull-down R shuts off switch.
+    BATTERY_ENABLE_PORT &= ~BV(BATTERY_ENABLE_PIN);  // low (TNC 2.2)
+    BATTERY_ENABLE_DDR &= ~BV(BATTERY_ENABLE_PIN);   // Hi-Z
 
     adc *= 100;
     uint16_t result = adc / 976;

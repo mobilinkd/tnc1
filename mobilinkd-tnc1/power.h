@@ -20,7 +20,7 @@ void power_on_message(int hc_status);
 
 void enable_power_off(void);
 void request_power_off(void);
-bool power_off_requested(void);
+int power_off_requested(void);
 void power_off(void);
 
 #define POWER_ON_VIN_ON 1
@@ -29,6 +29,6 @@ void power_off(void);
 void set_power_config(uint8_t config);
 uint8_t get_power_config(void);
 
-bool usb_vin_available(void);
+int usb_vin_available(void);
 
 #endif // POWER_H_

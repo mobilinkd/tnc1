@@ -82,6 +82,12 @@ void power_on(void)
 
     AUDIO_OFFSET_DDR |= BV(AUDIO_OFFSET_PIN);
     AUDIO_OFFSET_PORT |= BV(AUDIO_OFFSET_PIN);
+
+    AUDIO_OUTPUT_ATTEN_DDR |= BV(AUDIO_OUTPUT_ATTEN_PIN);     // output mode
+    AUDIO_OUTPUT_ATTEN_PORT &= ~BV(AUDIO_OUTPUT_ATTEN_PIN);   // low (TNC 2.2)
+
+    BATTERY_ENABLE_DDR &= ~BV(BATTERY_ENABLE_PIN);    // Hi-Z
+    VIN_DETECT_DDR &= ~BV(VIN_DETECT_PIN);            // Hi-Z (input)
 }
 
 void request_power_off(void)
@@ -89,7 +95,7 @@ void request_power_off(void)
     power_request = POWER_OFF;
 }
 
-bool power_off_requested(void)
+int power_off_requested(void)
 {
     return power_request == POWER_OFF;
 }
@@ -130,6 +136,14 @@ void power_off(void)
     // Remove the offset voltage for ADC
     AUDIO_OFFSET_PORT &= ~BV(AUDIO_OFFSET_PIN);
     AUDIO_OFFSET_DDR &= ~BV(AUDIO_OFFSET_PIN);
+
+    // Make the OUTPUT ATTEN high-Z (TODO -- set volume level)
+    AUDIO_OUTPUT_ATTEN_DDR &= ~BV(AUDIO_OUTPUT_ATTEN_PIN);
+    AUDIO_OUTPUT_ATTEN_PORT &= ~BV(AUDIO_OUTPUT_ATTEN_PIN);
+
+    // Disable battery input; pull-down R shuts off switch.
+    BATTERY_ENABLE_PORT &= ~BV(BATTERY_ENABLE_PIN);  // low (TNC 2.2)
+    BATTERY_ENABLE_DDR &= ~BV(BATTERY_ENABLE_PIN);   // Hi-Z
 
     // disable ADC
     uint8_t ADCSRA_save = ADCSRA;
@@ -223,8 +237,8 @@ void power_on_message(int hc_status)
     kfile_print_P(&ser.fd, PSTR("== Starting.\r\n"));
 }
 
-bool usb_vin_available(void)
+int usb_vin_available(void)
 {
     VIN_DETECT_DDR &= ~BV(VIN_DETECT_PIN);
-    return ((VIN_DETECT_PORT & BV(VIN_DETECT_PIN)) != 0);
+    return ((VIN_DETECT_PORT & BV(VIN_DETECT_PIN)) == 0);
 }
