@@ -245,33 +245,24 @@ uint8_t init_hc05(KFile* ser)
 
     if (!hc05_adjust_polarity(ser)) result |= 1;
 
-    kfile_print_P(ser, NAME_qry);
+    // UART_cmd first.
+    kfile_print_P(ser, UART_cmd);
     kfile_flush(ser);
-    bool name_ok = ends_with_P(ser, BT_NAME, 1000);
     if (!starts_with_P(ser, OK_rsp, 1000L))
-        result |= 2;
+        result |= 16;
 
-    if (!name_ok)   // Need to initialize the HC-05 module.
-    {
-        result |= 4;
-        kfile_print_P(ser, NAME_cmd);
-        kfile_print_P(ser, BT_NAME);
-        kfile_print_P(ser, NEWLINE);
-        kfile_flush(ser);
-        if (!starts_with_P(ser, OK_rsp, 1000L))
-            result |= 8;
+    result |= 4;
+    kfile_print_P(ser, NAME_cmd);
+    kfile_print_P(ser, BT_NAME);
+    kfile_print_P(ser, NEWLINE);
+    kfile_flush(ser);
+    if (!starts_with_P(ser, OK_rsp, 1000L))
+        result |= 8;
 
-        kfile_print_P(ser, UART_cmd);
-        kfile_flush(ser);
-        if (!starts_with_P(ser, OK_rsp, 1000L))
-            result |= 16;
-
-        kfile_print_P(ser, RESET_cmd);
-        kfile_flush(ser);
-        if (!starts_with_P(ser, OK_rsp, 1000L))
-            result |= 32;
-
-    }
+    kfile_print_P(ser, RESET_cmd);
+    kfile_flush(ser);
+    if (!starts_with_P(ser, OK_rsp, 1000L))
+        result |= 32;
 
     timer_delay(1000L);
     hc05_normal_mode();
