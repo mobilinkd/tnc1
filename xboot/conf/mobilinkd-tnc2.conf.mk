@@ -1,4 +1,4 @@
-# XBoot Configuration for Mobilinkd TNC1 (atmega328p)
+# XBoot Configuration for Mobilinkd TNC2 (atmega328p/pb)
 # http://www.mobilinkd.com/
 
 # Note: if you have problems updating the firmware on Linux, make sure
