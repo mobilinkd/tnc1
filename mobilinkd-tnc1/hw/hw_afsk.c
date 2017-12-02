@@ -134,7 +134,7 @@ DECLARE_ISR(ADC_vect)
 #if CONFIG_AFSK_PWM_TX == 1
 DECLARE_ISR(TIMER0_OVF_vect)
 {
-    OCR0A = afsk_dac_isr(ctx);             // uses timer 0 on port D bit 5
+    OCR0A = afsk_dac_isr(ctx);             // uses timer 0 on port D bit 6
 }
 #else
 DECLARE_ISR(TIMER2_COMPA_vect)

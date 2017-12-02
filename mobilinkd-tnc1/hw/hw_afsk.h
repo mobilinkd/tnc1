@@ -39,6 +39,7 @@
 #ifndef HW_AFSK_H
 #define HW_AFSK_H
 
+#include "config.h"
 #include "cfg/cfg_arch.h"
 #include <cfg/cfg_afsk.h>
 #include <cfg/macros.h>
@@ -48,6 +49,7 @@
 struct Afsk;
 void hw_afsk_adcInit(int ch, struct Afsk *_ctx);
 void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
+void hw_afsk_pttInit(int ch, struct Afsk *_ctx);
 
 /**
  * Initialize the specified channel of the ADC for AFSK needs.
@@ -85,6 +87,17 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  */
 #define AFSK_STROBE_OFF()  do {} while (0)
 
+#define AFSK_PTT_INIT(CTX, PIN) do { \
+    PTT_DDR |= BV(PIN); \
+    CTX->ptt_pin = PIN; \
+} while (0)
+
+#define AFSK_PTT_DEINIT(CTX) do {PTT_DDR &= ~BV(CTX->ptt_pin);} while (0)
+
+#define AFSK_PTT_ON(CTX) do {PTT_PORT |= BV(CTX->ptt_pin);} while (0)
+
+#define AFSK_PTT_OFF(CTX) do {PTT_PORT &= ~BV(CTX->ptt_pin);} while (0)
+
 #define DAC_TIMER_VALUE (DIV_ROUND((CPU_FREQ / 8), CONFIG_AFSK_DAC_SAMPLERATE))
 
 /**
@@ -98,19 +111,13 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  *             passed back to afsk_dac_isr() for every convertion.
  */
 #if CONFIG_AFSK_PWM_TX == 1
-// If using a PWM output then use mode 3 fast (asymmetric) mode running as fast as possible
-// on port D bit 3 (Arduino D3) thus keeping PTT on the original port B bit 3 (Arduino D11).
 #define AFSK_DAC_INIT(ch, ctx)\
 	do { \
 		(void)ch, (void)ctx;\
 			TCCR0A = BV(COM0A1) | BV(WGM01) | BV(WGM00); \
 			TCCR0B = BV(CS00); \
-			DDRB |= BV(2);\
 			TIMSK0 = BV(TOIE0); \
-			DDRD &= ~BV(4); PORTD &= ~BV(4); \
-			DDRD &= ~BV(5); PORTD &= ~BV(5); \
             DDRD |= BV(6); \
-			DDRD &= ~BV(7); PORTD &= ~BV(7); \
 		} while (0)
 #else
 #define AFSK_DAC_INIT(ch, ctx)\
@@ -122,7 +129,6 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
         TIMSK2 = BV(OCIE2A); \
         (void)ch, (void)ctx; \
         DDRD |= 0xF0; \
-        DDRB |= BV(2); \
     } while (0)
 #endif
 
@@ -131,10 +137,10 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  * Start DAC convertions on channel \a ch.
  * \param ch DAC channel.
  */
-#define AFSK_DAC_IRQ_START(af)\
+#define AFSK_DAC_IRQ_START(ctx)\
     do { \
         extern bool hw_afsk_dac_isr; \
-        PORTB |= BV(2); \
+        AFSK_PTT_ON(ctx)
         hw_afsk_dac_isr = true; \
         TCCR1B = 0; \
         TCNT2 = DAC_TIMER_VALUE; \
@@ -145,7 +151,6 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  * Start DAC conversions.
  *
  * PWM is on D5.
- * PTT is on B2.
  *
  * Turn on PTT.
  * Turn off ADC interrupt.
@@ -154,7 +159,7 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
 #define AFSK_DAC_IRQ_START(af)\
     do { \
         extern bool hw_afsk_dac_isr; \
-        PORTB |= BV(2); \
+        AFSK_PTT_ON(af); \
         hw_afsk_dac_isr = true; \
         ADCSRA &= ~(BV(ADATE) | BV(ADEN) | BV(ADSC) | BV(ADIE)); \
         TCCR0B = BV(CS00); \
@@ -166,11 +171,10 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  * Stop DAC conversions on channel \a ch.
  * \param ch DAC channel.
  */
-#define AFSK_DAC_IRQ_STOP(ch)\
+#define AFSK_DAC_IRQ_STOP(ctx)\
     do { \
-        (void)ch; \
         extern bool hw_afsk_dac_isr; \
-        PORTB &= ~BV(2); PORTD &= 3; \
+        AFSK_PTT_OFF(ctx); \
         hw_afsk_dac_isr = false; \
         TCCR1B = BV(CS11) | BV(WGM13) | BV(WGM12); \
         TCCR2B = 0; \
@@ -184,11 +188,10 @@ void hw_afsk_dacInit(int ch, struct Afsk *_ctx);
  * Turn on ADC interrupt.
  *
  */
-#define AFSK_DAC_IRQ_STOP(ch)\
+#define AFSK_DAC_IRQ_STOP(ctx)\
     do { \
-        (void)ch; \
         extern bool hw_afsk_dac_isr; \
-        PORTB &= ~BV(2); \
+        AFSK_PTT_OFF(ctx); \
         hw_afsk_dac_isr = false; \
         TCCR0B = 0; \
         ADCSRA |= (BV(ADATE) | BV(ADEN) | BV(ADSC) | BV(ADIE)); \

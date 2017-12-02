@@ -13,16 +13,13 @@
 
 #include "hc-05.h"
 #include "mobilinkd_util.h"
+#include "config.h"
 
-static EEMEM uint16_t bt_initialized = 0;
+static EEMEM uint16_t bt_initialized;
 
-#define BT_INIT_MAGIC 0xc0a1
+#define BT_INIT_MAGIC 0xc0a2
 
-const uint8_t BT_RESET_PIN = 3;
-const uint8_t BT_COMMAND_PIN = 2;
-const uint8_t BT_CONNECT_PIN = 13;
-
-const char BT_NAME[] PROGMEM = "Mobilinkd TNC1";
+const char BT_NAME[] PROGMEM = "Mobilinkd TNC2";
 const char NEWLINE[] PROGMEM = "\r\n";
 
 const char OK_rsp[] PROGMEM = "OK";
@@ -118,31 +115,54 @@ static bool ends_with_P(KFile* ser, const char* compare, mtime_t timeout_ms)
     return false;
 }
 
+void hc05_power_on(void)
+{
+    HC_05_RESET_PORT |= BV(HC_05_RESET_PIN);    // Bring it back high for normal use.
+    HC_05_RESET_DDR &= ~BV(HC_05_RESET_PIN);    // Set BT reset pin to input mode.
+    HC_05_POWER_DDR |= BV(HC_05_POWER_PIN);     // Set power pin as output.
+    HC_05_POWER_PORT |= BV(HC_05_POWER_PIN);    // Set it high to power on.
+    timer_delay(500);
+}
+
+void hc05_power_off(void)
+{
+    HC_05_RESET_DDR |= BV(HC_05_RESET_PIN);     // Set BT reset pin to output mode.
+    HC_05_RESET_PORT &= ~BV(HC_05_RESET_PIN);   // Bring it low to reset the BT module.
+    timer_delay(5);
+
+    HC_05_POWER_DDR |= BV(HC_05_POWER_PIN);     // Set power pin as output.
+    HC_05_POWER_PORT &= ~BV(HC_05_POWER_PIN);   // Set power pin low to power down.
+    timer_delay(5);
+
+    // HC_05_POWER_DDR &= ~BV(HC_05_POWER_PIN);    // Set power pin input (high impedance).
+    // HC_05_RESET_DDR &= ~BV(HC_05_RESET_PIN);    // Set BT reset pin to input mode.
+}
+
 INLINE void hc05_reset(void)
 {
-    DDRD |= BV(BT_RESET_PIN);       // Set BT reset pin to output mode.
-    PORTD &= ~BV(BT_RESET_PIN);     // Bring it low to reset the BT module.
+    HC_05_RESET_DDR |= BV(HC_05_RESET_PIN);     // Set BT reset pin to output mode.
+    HC_05_RESET_PORT &= ~BV(HC_05_RESET_PIN);   // Bring it low to reset the BT module.
     timer_delay(200L);
-    PORTD |= BV(BT_RESET_PIN);      // Bring it back high for normal use.
-    DDRD &= ~BV(BT_RESET_PIN);      // Set BT reset pin to input mode.
+    HC_05_RESET_PORT |= BV(HC_05_RESET_PIN);    // Bring it back high for normal use.
+    HC_05_RESET_DDR &= ~BV(HC_05_RESET_PIN);    // Set BT reset pin to input mode.
     timer_delay(800L);
 }
 
 INLINE void hc05_command_mode(void)
 {
     // Bring PD2 HIGH to enter command mode.
-    PORTD |= BV(BT_COMMAND_PIN);
+    HC_05_COMMAND_PORT |= BV(HC_05_COMMAND_PIN);
 }
 
 INLINE void hc05_normal_mode(void)
 {
     // Bring PD2 LOW to exit command mode.
-    PORTD &= ~BV(BT_COMMAND_PIN);
+    HC_05_COMMAND_PORT &= ~BV(HC_05_COMMAND_PIN);
 }
 
 bool hc05_connected()
 {
-    return (PINB & BV(PORTB5)) ? false : true;
+    return ((HC_05_STATUS_INPORT & BV(HC_05_STATUS_PIN)) ? false : true);
 }
 
 INLINE bool hc05_soft_reset(KFile* ser)
@@ -180,10 +200,6 @@ INLINE bool hc05_soft_reset(KFile* ser)
  */
 INLINE bool hc05_adjust_polarity(KFile* ser)
 {
-    // Set PB5 to input with pull-up engaged.
-    DDRB &= ~BV(PORTB5);
-    PORTB |= BV(PORTB5);
-
     kfile_print_P(ser, POLAR_cmd);
     kfile_flush(ser);
     return starts_with_P(ser, OK_rsp, 1000L);
@@ -191,7 +207,12 @@ INLINE bool hc05_adjust_polarity(KFile* ser)
 
 uint8_t init_hc05(KFile* ser)
 {
-    DDRD |= BV(BT_COMMAND_PIN);
+    // Set HC_05_COMMAND_PIN to output.
+    HC_05_COMMAND_DDR |= BV(HC_05_COMMAND_PIN);
+
+    // Set HC_05_STATUS_PIN to input with pull-up engaged.
+    HC_05_STATUS_DDR &= ~BV(HC_05_STATUS_PIN);
+    HC_05_STATUS_PORT |= BV(HC_05_STATUS_PIN);
 
     uint8_t result = 0;
 
@@ -224,33 +245,24 @@ uint8_t init_hc05(KFile* ser)
 
     if (!hc05_adjust_polarity(ser)) result |= 1;
 
-    kfile_print_P(ser, NAME_qry);
+    // UART_cmd first.
+    kfile_print_P(ser, UART_cmd);
     kfile_flush(ser);
-    bool name_ok = ends_with_P(ser, BT_NAME, 1000);
     if (!starts_with_P(ser, OK_rsp, 1000L))
-        result |= 2;
+        result |= 16;
 
-    if (!name_ok)   // Need to initialize the HC-05 module.
-    {
-        result |= 4;
-        kfile_print_P(ser, NAME_cmd);
-        kfile_print_P(ser, BT_NAME);
-        kfile_print_P(ser, NEWLINE);
-        kfile_flush(ser);
-        if (!starts_with_P(ser, OK_rsp, 1000L))
-            result |= 8;
+    result |= 4;
+    kfile_print_P(ser, NAME_cmd);
+    kfile_print_P(ser, BT_NAME);
+    kfile_print_P(ser, NEWLINE);
+    kfile_flush(ser);
+    if (!starts_with_P(ser, OK_rsp, 1000L))
+        result |= 8;
 
-        kfile_print_P(ser, UART_cmd);
-        kfile_flush(ser);
-        if (!starts_with_P(ser, OK_rsp, 1000L))
-            result |= 16;
-
-        kfile_print_P(ser, RESET_cmd);
-        kfile_flush(ser);
-        if (!starts_with_P(ser, OK_rsp, 1000L))
-            result |= 32;
-
-    }
+    kfile_print_P(ser, RESET_cmd);
+    kfile_flush(ser);
+    if (!starts_with_P(ser, OK_rsp, 1000L))
+        result |= 32;
 
     timer_delay(1000L);
     hc05_normal_mode();

@@ -43,12 +43,13 @@
  * $WIZ$ module_hw = "bertos/hw/hw_kiss.h"
  */
 
-
+#include "mobilinkd_eeprom.h"
 #include "cfg/cfg_kiss.h"
 
 #include <cfg/compiler.h>
 
 #include <io/kfile.h>
+#include <net/afsk.h>
 
 // Firmware capabilities
 #define CAP_DCD                     0x0001
@@ -60,25 +61,8 @@
 #define CAP_BT_NAME_CHANGE          0x0040
 #define CAP_BT_PIN_CHANGE           0x0080
 #define CAP_VERBOSE_ERROR           0x0100
+#define CAP_EEPROM_SAVE             0x0200
 
-
-typedef struct Params
-{
-	uint8_t txdelay;             ///< How long in 10mS units to wait for TX to settle before starting data
-	uint8_t persist;             ///< Likelyhood of taking the channel when its not busy
-	uint8_t slot;                ///< How long in 10mS units to wait between sampling the channel to see if free
-	uint8_t txtail;              ///< How long in 10mS units to wait after the data before keying off the transmitter
-	uint8_t duplex;              ///< Ignore current channel activity - just key up
-	uint8_t output_volume;       ///< output volume (0-255)
-	uint8_t input_volume;        ///< input attenuation
-	uint8_t squelch;             ///< input squelch level (0-255)
-	uint8_t options;             ///< boolean options
-	uint8_t chksum;              ///< Validity check of params data
-} Params;
-
-// Boolean options.
-#define KISS_OPTION_CONN_TRACK  0x01
-#define KISS_OPTION_VERBOSE     0x02
 
 #define HW_CMD_BUFFER_SIZE 16
 
@@ -127,4 +111,44 @@ INLINE void kiss_set_conn_track(KissCtx * k, uint8_t value)
 INLINE uint8_t kiss_get_conn_track(const KissCtx* k)
 {
     return (k->params.options & KISS_OPTION_CONN_TRACK) ? 1 : 0;
+}
+
+INLINE void kiss_set_ptt_mode(KissCtx* k, uint8_t mode)
+{
+    if (mode == AFSK_PTT_MODE_SIMPLEX)
+        k->params.options |= KISS_OPTION_PTT_SIMPLEX;
+    else
+        k->params.options &= ~KISS_OPTION_PTT_SIMPLEX;
+}
+
+INLINE uint8_t kiss_get_ptt_mode(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_PTT_SIMPLEX) ?
+        AFSK_PTT_MODE_SIMPLEX : AFSK_PTT_MODE_MULTIPLEX;
+}
+
+INLINE void kiss_set_usb_power_on(KissCtx* k, uint8_t value)
+{
+    if (value)
+        k->params.options |= KISS_OPTION_VIN_POWER_ON;
+    else
+        k->params.options &= ~KISS_OPTION_VIN_POWER_ON;
+}
+
+INLINE uint8_t kiss_get_usb_power_on(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_VIN_POWER_ON) ? 1 : 0;
+}
+
+INLINE void kiss_set_usb_power_off(KissCtx* k, uint8_t value)
+{
+    if (value)
+        k->params.options |= KISS_OPTION_VIN_POWER_OFF;
+    else
+        k->params.options &= ~KISS_OPTION_VIN_POWER_OFF;
+}
+
+INLINE uint8_t kiss_get_usb_power_off(const KissCtx* k)
+{
+    return (k->params.options & KISS_OPTION_VIN_POWER_OFF) ? 1 : 0;
 }

@@ -65,18 +65,17 @@
 #include "buildrev.h"
 #include "hc-05.h"
 #include "battery.h"
+#include "power.h"
 #include "mobilinkd_error.h"
-#include "mobilinkd_version.h"
 #include "mobilinkd_util.h"
 
 static Afsk afsk;
-static Serial ser;
+Serial ser;
 static KissCtx kiss;
 
 #define ADC_CH 0
 
 uint8_t mcusr_mirror __attribute__ ((section (".noinit")));
-volatile uint8_t wdt_location __attribute__ ((section (".noinit")));
 
 void get_mcusr(void) __attribute__((naked))
 __attribute__((section(".init3")));
@@ -87,10 +86,25 @@ void get_mcusr(void)
     wdt_disable();
 }
 
-const char firmware_version[] PROGMEM = "\050" MOBILINKD_VERSION_STR;
-const char hardware_version[] PROGMEM = "\051" "1.12";
-const char PREFIX[] PROGMEM = "== ";
-const char ENDL[] PROGMEM = "\r\n";
+/**
+ * This is a new version of the Mobilinkd TNC.
+ *
+ * Key differences are:
+ * Use the Atmega 328P "Power Down" mode to power down the TNC,
+ * eliminating the need for the power control circuitry.
+ *
+ * This provides push-button on/off, as well as 5V detection and power
+ * control based on whether USB power is available.
+ *
+ * The push button can be used by the bootloader to determine whether
+ * to run.  This means that non-intentional reboots will not cause the
+ * firmware to be erased.
+ *
+ * In order to do this, the HC-05 Command and Reset pins had to be
+ * moved because they occupy the only pins that can wake the TNC from
+ * Standby mode.  PD2 (INT0) and PD3 (INT1) are used for 5V and and
+ * power button respectively.
+ */
 
 /**
  * Initialize the module.  Initialize the following subsystems:
@@ -107,46 +121,45 @@ const char ENDL[] PROGMEM = "\r\n";
  */
 static void init(void)
 {
-
     IRQ_ENABLE;
     kdbg_init();
     timer_init();
 
-    /* Initialize serial port */
-    ser_init(&ser, SER_UART0);
-    ser_setbaudrate(&ser, 38400L);
+    power_on();
 
     int hc_status = init_hc05(&ser.fd);
 
-    uint16_t voltage = check_battery();
-
-    // Announce
-    kfile_print_P(&ser.fd, PSTR("\r\n== BeRTOS AVR/Mobilinkd TNC1\r\n"));
-
-    kfile_print_P(&ser.fd, PSTR("== Version "));
-    kfile_print_P(&ser.fd, firmware_version + 1);
-    kfile_print_P(&ser.fd, ENDL);
-
-    kfile_printf(&ser.fd, "== Voltage: %umV\r\n", voltage);
-#ifdef DEBUG
-    kfile_printf(&ser.fd, "== WDT (loc = %02x)\r\n", wdt_location);
-    kfile_print_P(&ser.fd, PREFIX);
-    kfile_print_P(&ser.fd, mobilinkd_strerror(mobilinkd_get_error()));
-    kfile_print_P(&ser.fd, ENDL);
-#endif
     wdt_location = 0;
-
-    if (hc_status != 0)
-        kfile_printf(&ser.fd, "== HC-05 = %02x\r\n", hc_status);
-    kfile_print_P(&ser.fd, PSTR("== Starting.\r\n"));
 
     mobilinkd_set_error(MOBILINKD_ERROR_WATCHDOG_TIMEOUT);
 
     afsk_init(&afsk, ADC_CH, 0);
+
     wdt_location = 1;
 
     kiss_init(&kiss, &afsk.fd, &ser.fd);
     wdt_location = 2;
+
+    if (kiss.params.options & KISS_OPTION_VIN_POWER_ON)
+    {
+        set_power_config(get_power_config() | POWER_ON_VIN_ON);
+    }
+    if (kiss.params.options & KISS_OPTION_VIN_POWER_OFF)
+    {
+        set_power_config(get_power_config() | POWER_OFF_VIN_OFF);
+    }
+
+    if (kiss.params.options & KISS_OPTION_PTT_SIMPLEX)
+    {
+        afsk_ptt_set(&afsk, AFSK_PTT_MODE_SIMPLEX);
+    }
+    else
+    {
+        afsk_ptt_set(&afsk, AFSK_PTT_MODE_MULTIPLEX);
+    }
+
+    power_on_message(hc_status);
+    enable_power_off();
 
     wdt_enable(WDTO_4S);
 }
@@ -162,6 +175,8 @@ int main(void)
 
     while (1)
     {
+        if (power_off_requested()) power_off();
+
         if (mobilinkd_get_error() != MOBILINKD_ERROR_WATCHDOG_TIMEOUT)
         {
             if (kiss_get_verbosity(&kiss))

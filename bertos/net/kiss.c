@@ -44,13 +44,14 @@
  */
 
 #include "kiss.h"
-#include "hw/hw_kiss.h"
 #include "cfg/cfg_kiss.h"
+#include "mobilinkd_eeprom.h"
 #include "mobilinkd_version.h"
 #include "mobilinkd_error.h"
 
 #include "hc-05.h"
 #include "battery.h"
+#include "power.h"
 
 #define LOG_LEVEL   KISS_LOG_LEVEL
 #define LOG_FORMAT  KISS_LOG_FORMAT
@@ -96,6 +97,7 @@
 #define STREAM_VOLUME      7
 
 // HW commands (should be in kiss HW module?)
+#define SAVE                    0   // Save settings to EEPROM.
 #define SET_OUTPUT_VOLUME       1
 #define SET_INPUT_ATTEN         2
 #define SET_SQUELCH_LEVEL       3
@@ -110,6 +112,7 @@
 #define GET_OUTPUT_VOLUME      12
 #define GET_INPUT_ATTEN        13
 #define GET_SQUELCH_LEVEL      14
+#define STREAM_DCD_VALUE       15
 
 #define SET_VERBOSITY          16
 #define GET_VERBOSITY          17
@@ -122,6 +125,7 @@
 
 #define GET_FIRMWARE_VERSION   40
 #define GET_HARDWARE_VERSION   41
+#define SAVE_EEPROM_SETTINGS   42
 
 #define SET_BLUETOOTH_NAME     65
 #define GET_BLUETOOTH_NAME     66
@@ -132,11 +136,21 @@
 #define SET_BT_MAJOR_CLASS     71   // Bluetooth Major Class
 #define GET_BT_MAJOR_CLASS     72   // Bluetooth Major Class
 
+#define SET_USB_POWER_ON       73   // Power on when USB power available
+#define GET_USB_POWER_ON       74
+#define SET_USB_POWER_OFF      75   // Power off when USB power unavailable
+#define GET_USB_POWER_OFF      76
+#define SET_BT_POWER_OFF       77   // Power off after n seconds w/o BT conn
+#define GET_BT_POWER_OFF       78
+
+#define SET_PTT_CHANNEL        79   // Which PTT line to use (currently 0 or 1,
+#define GET_PTT_CHANNEL        80   // multiplex or simplex)
+
 #define GET_CAPABILITIES      126   // Send all capabilities.
 #define GET_ALL_VALUES        127   // Send all settings & versions.
 
 
-extern uint8_t wdt_location;
+extern volatile uint8_t wdt_location;
 
 static uint8_t checksum(KissCtx* k)
 {
@@ -156,7 +170,7 @@ static void save_params(KissCtx * k)
 {
     k->params.chksum = checksum(k);
 
-    KISS_EEPROM_SAVE ();
+    MOBILINKD_EEPROM_SAVE((k->params));
 }
 
 
@@ -170,20 +184,20 @@ static void save_params(KissCtx * k)
 static void load_params(KissCtx * k)
 {
 
-    KISS_EEPROM_LOAD ();
+    MOBILINKD_EEPROM_LOAD((k->params));
 
     if (k->params.chksum != checksum(k))
     {
         // load sensible defaults if backing store has a bad checksum
-        k->params.txdelay = 50;
+        k->params.txdelay = 33;
         k->params.persist = 64;
         k->params.slot = 10;
         k->params.txtail = 1;
         k->params.duplex = 0;
         k->params.output_volume = 128;
         k->params.input_volume = 2;
-        k->params.squelch = 2;
-        k->params.options = 0;
+        k->params.squelch = 0;
+        k->params.options = KISS_OPTION_PTT_SIMPLEX;
         save_params(k);
     }
 }
@@ -280,6 +294,15 @@ static void send_input_volume(KissCtx* k)
     uint8_t buf[2];
     buf[0] = POLL_INPUT_VOLUME;
     buf[1] = get_input_volume(k->modem);
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_dcd_value(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = STREAM_DCD_VALUE;
+    buf[1] = get_carrier(k->modem);
     kiss_tx_to_serial(k, HARDWARE, buf, 2);
     kfile_flush(k->serial);
 }
@@ -390,6 +413,33 @@ static void send_bt_conn_track(KissCtx* k)
     kfile_flush(k->serial);
 }
 
+static void send_ptt_channel(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_PTT_CHANNEL;
+    buf[1] = kiss_get_ptt_mode(k);
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_usb_power_on(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_USB_POWER_ON;
+    buf[1] = kiss_get_usb_power_on(k);
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
+static void send_usb_power_off(KissCtx* k)
+{
+    uint8_t buf[2];
+    buf[0] = GET_USB_POWER_OFF;
+    buf[1] = kiss_get_usb_power_off(k);
+    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    kfile_flush(k->serial);
+}
+
 static void send_capabilities(KissCtx* k)
 {
     uint8_t buf[3];
@@ -398,8 +448,8 @@ static void send_capabilities(KissCtx* k)
         CAP_INPUT_ATTEN | CAP_SQUELCH;
     // TNC is connected.  If detected, connection tracking is possible.
     buf[1] |= hc05_connected() ? CAP_BT_CONN_TRACK : 0;
-    buf[2] = (CAP_VERBOSE_ERROR) >> 8;
-    kiss_tx_to_serial(k, HARDWARE, buf, 2);
+    buf[2] = (CAP_VERBOSE_ERROR | CAP_EEPROM_SAVE) >> 8;
+    kiss_tx_to_serial(k, HARDWARE, buf, 3);
     kfile_flush(k->serial);
 }
 
@@ -416,6 +466,9 @@ static void send_all_values(KissCtx* k)
     send_input_atten(k);
     send_battery_level(k);
     send_verbosity(k);
+    send_ptt_channel(k);
+    send_usb_power_on(k);
+    send_usb_power_off(k);
     send_capabilities(k);
     // TNC is connected.  If detected, connection tracking is possible.
     if (hc05_connected()) send_bt_conn_track(k);
@@ -428,25 +481,28 @@ static void kiss_decode_hw_command(KissCtx * k)
     uint8_t cmd = k->tx_buf[0];
     uint8_t value = k->tx_buf[1];
 
+    uint8_t power = 0;
+
     LOG_INFO("kiss_decode_hw_command (%d)\r\n", (int) cmd);
 
     switch (cmd)
     {
+    case SAVE_EEPROM_SETTINGS:
+        save_params(k);
+        LOG_INFO("Stored setting to EEPROM");
+        break;
     case SET_OUTPUT_VOLUME:
         k->params.output_volume = value;
-        save_params(k);
         set_output_volume(k->modem, value);
         LOG_INFO("SET_OUTPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_INPUT_ATTEN:
         k->params.input_volume = value;
-        save_params(k);
         set_input_atten(k->modem, value);
         LOG_INFO("SET_INPUT_VOLUME (%d)\r\n", (int) value);
         break;
     case SET_SQUELCH_LEVEL:
         k->params.squelch = value;
-        save_params(k);
         set_squelch_level(k->modem, value);
         break;
     case POLL_INPUT_VOLUME:
@@ -517,7 +573,6 @@ static void kiss_decode_hw_command(KissCtx * k)
         break;
     case SET_VERBOSITY:
         kiss_set_verbosity(k, value);
-        save_params(k);
         break;
     case GET_VERBOSITY:
         send_verbosity(k);
@@ -526,7 +581,6 @@ static void kiss_decode_hw_command(KissCtx * k)
         if (hc05_connected())
         {
             kiss_set_conn_track(k, value);
-            save_params(k);
         }
         break;
     case GET_BT_CONN_TRACK:
@@ -534,6 +588,37 @@ static void kiss_decode_hw_command(KissCtx * k)
         {
             send_bt_conn_track(k);
         }
+        break;
+    case SET_PTT_CHANNEL:
+        kiss_set_ptt_mode(k, value);
+        afsk_ptt_set((Afsk*) k->modem, value);  // 0 = simplex, 1 = multiplex
+        break;
+    case GET_PTT_CHANNEL:
+        send_ptt_channel(k);
+        break;
+    case SET_USB_POWER_ON:
+        kiss_set_usb_power_on(k, value);
+        power = get_power_config();
+
+        if (value) set_power_config(power | POWER_ON_VIN_ON);
+        else set_power_config(power & ~POWER_ON_VIN_ON);
+
+        break;
+    case GET_USB_POWER_ON:
+        afsk_test_tx_end(k->modem);
+        send_usb_power_on(k);
+        break;
+    case SET_USB_POWER_OFF:
+        kiss_set_usb_power_off(k, value);
+        power = get_power_config();
+
+        if (value) set_power_config(power | POWER_OFF_VIN_OFF);
+        else set_power_config(power & ~POWER_OFF_VIN_OFF);
+
+        break;
+    case GET_USB_POWER_OFF:
+        afsk_test_tx_end(k->modem);
+        send_usb_power_off(k);
         break;
     case GET_CAPABILITIES:
         afsk_test_tx_end(k->modem);
@@ -565,25 +650,20 @@ static void kiss_decode_command(KissCtx * k)
     {
     case TXDELAY:
         k->params.txdelay = b;
-        save_params(k);
         afsk_head(k->modem, b);
         break;
     case PERSIST:
         k->params.persist = b;
-        save_params(k);
         break;
     case SLOT:
         k->params.slot = b;
-        save_params(k);
         break;
     case TXTAIL:
         k->params.txtail = b;
-        save_params(k);
         afsk_tail(k->modem, b);
         break;
     case DUPLEX:
         k->params.duplex = b;
-        save_params(k);
         break;
     case HARDWARE:
         kiss_decode_hw_command(k);
@@ -654,7 +734,8 @@ static bool can_transmit(KissCtx* k)
     Afsk* afsk = AFSK_CAST(k->modem);
 
     // see if the channel is busy
-    if (carrier_present(afsk))
+    if ((k->params.squelch == 0 && carrier_present(afsk)) ||
+        (k->params.squelch > 0 && (get_input_volume(k->modem) > 4)))
     {
         wdt_location = 136;
         uint16_t i = rand();
@@ -822,6 +903,12 @@ void kiss_poll_serial(KissCtx * k)
      * This can lead to multi-second delays in sending.  While this is
      * happening, we may be dropping data from the serial port.
      *
+     * Waiting indefinitely, with no timeout whatsoever, resulted in a
+     * hung TNC when the squelch is open and DCD is not selected.  So we
+     * force a 30 second timeout at which point we drop the packet.  That
+     * value is rather arbitrary.  We could make this configurable if it
+     * ever becomes an issue.
+     *
      * We attempted to check if it is OK to transmit as soon as the first
      * KISS data symbol arrives, using the serial buffer as the TX buffer.
      * It seems older, slower Android devices will not TX all of the data
@@ -841,7 +928,14 @@ void kiss_poll_serial(KissCtx * k)
         }
         else
         {
-            return;
+            // If we cannot TX for 30 seconds, drop the packet.
+            if (timer_clock() - k->last_tick > ms_to_ticks(30000L)) {
+                kiss_flush_modem(k);
+                k->tx_pos = 0;
+                kiss_change_state(k, WAIT_FOR_DATA);
+            } else {
+                return;
+            }
         }
     }
 
@@ -891,7 +985,10 @@ void kiss_poll_serial(KissCtx * k)
                 k->escape_count++;
                 kfile_putc('?', k->serial);
                 kfile_flush(k->serial);
-                if (k->escape_count == 8) reboot();
+                if (k->escape_count == 8) {
+                    set_enter_bootloader();
+                    reboot();
+                }
                 break;
             }
             else
@@ -971,9 +1068,10 @@ void kiss_poll_serial(KissCtx * k)
     wdt_location = 133;
 
     if (k->state == STREAM_VOLUME
-        && timer_clock() - k->last_tick > ms_to_ticks(100L))
+        && timer_clock() - k->last_tick > ms_to_ticks(300L))
     {
         send_input_volume(k);
+        send_dcd_value(k);
         k->last_tick = timer_clock();
         return;
     }

@@ -328,7 +328,7 @@ uint8_t afsk_dac_isr(Afsk *af)
 		switch (af->curr_out)
 		{
 		case -1:
-			AFSK_DAC_IRQ_STOP (af->dac_ch);
+			AFSK_DAC_IRQ_STOP (af);
 			af->sending = false;
 			AFSK_STROBE_OFF ();
 			return 0;
@@ -404,7 +404,7 @@ static size_t afsk_write(KFile *fd, const void *_buf, size_t size)
             af->phase_inc = MARK_INC;
             af->phase_acc = 0;
             af->sending = true;
-            AFSK_DAC_IRQ_START (af);
+            AFSK_DAC_IRQ_START(af);
             AFSK_STROBE_ON();
         }
 	}
@@ -450,7 +450,7 @@ void afsk_head (KFile * fd, int c)
 {
 	Afsk *af = AFSK_CAST (fd);
 
-	hdlc_head (&af->tx_hdlc, c);
+	hdlc_head (&af->tx_hdlc, c + (c >> 1));
 }
 
 /**
@@ -465,7 +465,7 @@ void afsk_tail (KFile * fd, int c)
 {
 	Afsk *af = AFSK_CAST (fd);
 
-	hdlc_tail (&af->tx_hdlc, c);
+	hdlc_tail (&af->tx_hdlc, c + (c >> 1));
 }
 
 void afsk_test_tx_start(KFile *fd, int8_t hdlc_status)
@@ -548,4 +548,18 @@ void afsk_init(Afsk *af, int adc_ch, int dac_ch)
 	af->phase_inc = MARK_INC;
 
 	AfskDcd_init(&af->afskDcd);
+}
+
+void afsk_ptt_init(Afsk * af, uint8_t pin)
+{
+    AFSK_PTT_INIT(af, pin);
+}
+
+void afsk_ptt_set(Afsk* af, uint8_t mode)
+{
+    AFSK_PTT_DEINIT(af);
+    if (mode == AFSK_PTT_MODE_SIMPLEX)
+        AFSK_PTT_INIT(af, PTT_PIN_S);
+    else
+        AFSK_PTT_INIT(af, PTT_PIN_M);
 }

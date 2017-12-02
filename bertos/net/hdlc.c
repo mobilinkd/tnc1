@@ -183,8 +183,10 @@ int hdlc_decode(Hdlc * hdlc, bool bit, FIFOBuffer * fifo)
 			return ret;
 		}
 		else
+		{
 			// its a real '0' so store it (and add to CRC)
 			hdlc->ones_count = 0;
+		}
 	}
 	ret = hdlc_store_bit(hdlc, this_bit, fifo);
 

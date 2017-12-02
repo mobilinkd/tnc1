@@ -38,19 +38,7 @@
 #ifndef HW_KISS_H
 #define HW_KISS_H
 
-#include "cfg/cfg_arch.h"
-
-#include <avr/eeprom.h>
-
-
-// move this eeprom definition to a kblock device eventually
-Params EEMEM eeparams;
-
-
-#define KISS_EEPROM_SAVE() do { eeprom_write_block ((const void *) &k->params, (void *) &eeparams, sizeof (eeparams)); } while (0)
-
-#define KISS_EEPROM_LOAD() do { eeprom_read_block ((void *) &k->params, (const void *) &eeparams, sizeof (eeparams)); } while (0)
-
+#include "mobilinkd_eeprom.h"
 
 #endif
 
